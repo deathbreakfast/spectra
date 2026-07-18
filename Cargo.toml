@@ -23,16 +23,17 @@ description = "Typed logging and metrics for Rust services"
 repository = "https://github.com/unified-field-dev/spectra"
 
 [workspace.dependencies]
-spectra-core = { path = "spectra-core", package = "uf-spectra-core" }
-spectra-macros = { path = "spectra-macros" }
-spectra-backend-mem = { path = "spectra-backend-mem" }
-spectra-backend-sqlite = { path = "spectra-backend-sqlite" }
-spectra-backend-remote-common = { path = "spectra-backend-remote-common" }
-spectra-backend-tensorbase = { path = "spectra-backend-tensorbase" }
-spectra-backend-clickhouse = { path = "spectra-backend-clickhouse" }
-spectra-runtime = { path = "spectra-runtime" }
-spectra = { path = "spectra", package = "uf-spectra", default-features = false }
-spectra-testkit = { path = "spectra-testkit" }
+spectra-core = { path = "spectra-core", package = "uf-spectra-core", version = "0.1.0" }
+spectra-macros = { path = "spectra-macros", version = "0.1.0" }
+spectra-backend-mem = { path = "spectra-backend-mem", version = "0.1.0" }
+spectra-backend-sqlite = { path = "spectra-backend-sqlite", version = "0.1.0" }
+spectra-backend-remote-common = { path = "spectra-backend-remote-common", version = "0.1.0" }
+spectra-backend-tensorbase = { path = "spectra-backend-tensorbase", version = "0.1.0" }
+spectra-backend-clickhouse = { path = "spectra-backend-clickhouse", version = "0.1.0" }
+spectra-runtime = { path = "spectra-runtime", version = "0.1.0" }
+spectra = { path = "spectra", package = "uf-spectra", version = "0.1.0", default-features = false }
+# Unpublished; version present so library crates with testkit [dev-dependencies] can publish.
+spectra-testkit = { path = "spectra-testkit", version = "0.1.0" }
 quark = { package = "uf-quark", version = "0.1.1" }
 
 [workspace.lints.clippy]

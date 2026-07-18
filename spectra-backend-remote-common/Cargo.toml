@@ -4,7 +4,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Shared ClickHouse-protocol remote storage logic for Spectra backends"
-publish = false
+repository.workspace = true
+readme = "README.md"
 
 [dependencies]
 async-trait = "0.1"

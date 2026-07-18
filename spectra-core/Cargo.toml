@@ -7,7 +7,6 @@ description = "Spectra storage traits, sink, router, registry, and query DTOs"
 repository.workspace = true
 documentation = "https://docs.rs/uf-spectra-core"
 readme = "README.md"
-publish = false
 
 [lib]
 name = "spectra_core"

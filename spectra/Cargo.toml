@@ -7,7 +7,6 @@ description = "Declarative schemas and typed logging APIs for Rust services"
 repository.workspace = true
 documentation = "https://docs.rs/uf-spectra"
 readme = "README.md"
-publish = false
 
 [lib]
 name = "spectra"

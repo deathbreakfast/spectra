@@ -4,7 +4,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Remote ClickHouse storage adapter for Spectra metrics and events"
-publish = false
+repository.workspace = true
+readme = "README.md"
 
 [dependencies]
 async-trait = "0.1"

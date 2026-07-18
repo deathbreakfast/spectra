@@ -4,7 +4,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "SpectraBuilder, composite sink, and process install"
-publish = false
+repository.workspace = true
+readme = "README.md"
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
