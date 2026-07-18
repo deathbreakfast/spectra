@@ -1,0 +1,22 @@
+[package]
+name = "spectra-backend-clickhouse"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Remote ClickHouse storage adapter for Spectra metrics and events"
+publish = false
+
+[dependencies]
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = "1"
+spectra-backend-remote-common = { workspace = true }
+spectra-core = { workspace = true }
+tokio = { version = "1", features = ["rt"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+spectra-testkit = { workspace = true, features = ["mem"] }
+
+[lints]
+workspace = true

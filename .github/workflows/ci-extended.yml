@@ -1,0 +1,59 @@
+name: CI Extended E2E
+
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  CARGO_BUILD_JOBS: 1
+  RUST_BACKTRACE: 1
+
+jobs:
+  e2e-extended:
+    runs-on: ubuntu-latest
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:24
+        ports:
+          - 8123:8123
+        options: >-
+          --health-cmd "wget -qO- http://localhost:8123/ping || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SPECTRA_CLICKHOUSE_URL: http://localhost:8123
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: spectra-e2e embedded matrix
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-e2e
+          cargo test -p spectra-e2e
+      - name: mem storage contract
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-extract
+          cargo test -p spectra-backend-mem --test storage_contract
+      - name: sqlite storage contract
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-extract
+          cargo test -p spectra-backend-sqlite --test storage_contract
+      - name: tensorbase storage contract (stub + live if URL set)
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-extract
+          cargo test -p spectra-backend-tensorbase --test storage_contract
+      - name: clickhouse storage contract (stub + live)
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-extract
+          cargo test -p spectra-backend-clickhouse --test storage_contract -- --include-ignored
+      - name: remote e2e matrix (--ignored)
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-e2e
+          cargo test -p spectra-e2e --features clickhouse,tensorbase -- --ignored
+      - name: extended coverage snapshot
+        continue-on-error: true
+        run: |
+          cargo install cargo-llvm-cov --locked
+          export CARGO_TARGET_DIR=target-spectra-extract
+          ./scripts/coverage.sh --full --summary-only

@@ -1,0 +1,89 @@
+[package]
+name = "uf-spectra"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Declarative schemas and typed logging APIs for Rust services"
+repository.workspace = true
+documentation = "https://docs.rs/uf-spectra"
+readme = "README.md"
+publish = false
+
+[lib]
+name = "spectra"
+
+[package.metadata.cargo-machete]
+ignored = ["serde"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies]
+spectra-core = { workspace = true }
+spectra-macros = { workspace = true }
+spectra-runtime = { workspace = true }
+spectra-backend-mem = { workspace = true, optional = true }
+spectra-backend-sqlite = { workspace = true, optional = true }
+spectra-backend-tensorbase = { workspace = true, optional = true }
+spectra-backend-clickhouse = { workspace = true, optional = true }
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+trybuild = "1.0"
+
+[features]
+default = ["mem"]
+mem = ["dep:spectra-backend-mem"]
+sqlite = ["dep:spectra-backend-sqlite"]
+tensorbase = ["dep:spectra-backend-tensorbase"]
+clickhouse = ["dep:spectra-backend-clickhouse"]
+telemetry-console = ["spectra-runtime/telemetry-console"]
+
+[[example]]
+name = "quickstart"
+required-features = ["mem"]
+
+[[example]]
+name = "quickstart_remote"
+required-features = ["clickhouse"]
+
+[[example]]
+name = "quickstart_clickhouse_emit"
+required-features = ["clickhouse"]
+
+[[example]]
+name = "quickstart_tensorbase_emit"
+required-features = ["tensorbase"]
+
+[[example]]
+name = "quickstart_transport"
+required-features = ["mem"]
+
+[[example]]
+name = "quickstart_publish_only"
+required-features = ["mem"]
+
+[[example]]
+name = "quickstart_consume_forward"
+required-features = ["mem"]
+
+[[example]]
+name = "quickstart_sqlite"
+required-features = ["sqlite"]
+
+[[example]]
+name = "quickstart_schema_emit"
+required-features = ["mem"]
+
+[[example]]
+name = "quickstart_telemetry"
+required-features = ["mem", "telemetry-console"]
+
+[lints]
+workspace = true

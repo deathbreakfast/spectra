@@ -1,0 +1,23 @@
+[package]
+name = "spectra-backend-sqlite"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Durable embedded SQLite backend for upstream tests and e2e"
+publish = false
+
+[dependencies]
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde_json = "1"
+spectra-core = { workspace = true }
+tokio = { version = "1", features = ["rt"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+spectra-testkit = { workspace = true, features = ["sqlite"] }
+
+[lints]
+workspace = true

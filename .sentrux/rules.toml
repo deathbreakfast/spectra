@@ -1,0 +1,353 @@
+# Spectra workspace quality gates — verify with Sentrux MCP: scan → check_rules → health
+
+[project]
+name = "spectra"
+profile = "library"
+
+[thresholds]
+min_quality_signal = 7294
+max_cycles = 0
+max_new_f_dimensions = 0
+max_coupling_score = 8.0
+max_cross_module_edges = 80
+min_test_coverage_line = 0.0
+
+[constraints]
+max_cc = 25
+max_file_sloc = 450
+max_file_loc = 700
+max_fan_out = 15
+no_god_files = true
+
+# --- spectra-core must stay free of runtime, backends, facade, build, test ---
+
+[[boundaries]]
+from = "spectra-core/**"
+to = "spectra-runtime/**"
+reason = "Core must stay persistence/runtime-free"
+
+[[boundaries]]
+from = "spectra-core/**"
+to = "spectra/src/**"
+reason = "Core must not depend on public facade"
+
+[[boundaries]]
+from = "spectra-core/**"
+to = "spectra-backend-mem/**"
+reason = "Core must stay persistence/runtime-free"
+
+[[boundaries]]
+from = "spectra-core/**"
+to = "spectra-backend-sqlite/**"
+reason = "Core must stay persistence/runtime-free"
+
+[[boundaries]]
+from = "spectra-core/**"
+to = "spectra-backend-tensorbase/**"
+reason = "Core must stay persistence/runtime-free"
+
+[[boundaries]]
+from = "spectra-core/**"
+to = "spectra-backend-clickhouse/**"
+reason = "Core must stay persistence/runtime-free"
+
+[[boundaries]]
+from = "spectra-core/**"
+to = "spectra-backend-remote-common/**"
+reason = "Core must stay persistence/runtime-free"
+
+[[boundaries]]
+from = "spectra-core/**"
+to = "spectra-testkit/**"
+reason = "Core must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-core/**"
+to = "spectra-e2e/**"
+reason = "Core must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-core/**"
+to = "spectra-bench/**"
+reason = "Core must not depend on test harness"
+
+# --- spectra-macros: proc-macro only ---
+
+[[boundaries]]
+from = "spectra-macros/**"
+to = "spectra-core/**"
+reason = "Proc macros must not depend on runtime crates"
+
+[[boundaries]]
+from = "spectra-macros/**"
+to = "spectra-runtime/**"
+reason = "Proc macros must not depend on runtime crates"
+
+[[boundaries]]
+from = "spectra-macros/**"
+to = "spectra-backend-mem/**"
+reason = "Proc macros must not depend on backends"
+
+[[boundaries]]
+from = "spectra-macros/**"
+to = "spectra-backend-sqlite/**"
+reason = "Proc macros must not depend on backends"
+
+[[boundaries]]
+from = "spectra-macros/**"
+to = "spectra-backend-tensorbase/**"
+reason = "Proc macros must not depend on backends"
+
+[[boundaries]]
+from = "spectra-macros/**"
+to = "spectra-backend-clickhouse/**"
+reason = "Proc macros must not depend on backends"
+
+[[boundaries]]
+from = "spectra-macros/**"
+to = "spectra-backend-remote-common/**"
+reason = "Proc macros must not depend on backends"
+
+[[boundaries]]
+from = "spectra-macros/**"
+to = "spectra-testkit/**"
+reason = "Proc macros must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-macros/**"
+to = "spectra-e2e/**"
+reason = "Proc macros must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-macros/**"
+to = "spectra-bench/**"
+reason = "Proc macros must not depend on test harness"
+
+# --- backends must not depend on each other or test harness ---
+
+[[boundaries]]
+from = "spectra-backend-mem/**"
+to = "spectra-backend-sqlite/**"
+reason = "Backend adapters must not depend on each other"
+
+[[boundaries]]
+from = "spectra-backend-mem/**"
+to = "spectra-backend-tensorbase/**"
+reason = "Backend adapters must not depend on each other"
+
+[[boundaries]]
+from = "spectra-backend-mem/**"
+to = "spectra-backend-clickhouse/**"
+reason = "Backend adapters must not depend on each other"
+
+[[boundaries]]
+from = "spectra-backend-mem/**"
+to = "spectra-backend-remote-common/**"
+reason = "Embedded backend must not depend on remote common"
+
+[[boundaries]]
+from = "spectra-backend-mem/**"
+to = "spectra/src/**"
+reason = "Backend adapter must not depend on facade"
+
+[[boundaries]]
+from = "spectra-backend-mem/**"
+to = "spectra-testkit/**"
+reason = "Backend adapter must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-mem/**"
+to = "spectra-e2e/**"
+reason = "Backend adapter must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-mem/**"
+to = "spectra-bench/**"
+reason = "Backend adapter must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-sqlite/**"
+to = "spectra-backend-mem/**"
+reason = "Backend adapters must not depend on each other"
+
+[[boundaries]]
+from = "spectra-backend-sqlite/**"
+to = "spectra-backend-tensorbase/**"
+reason = "Backend adapters must not depend on each other"
+
+[[boundaries]]
+from = "spectra-backend-sqlite/**"
+to = "spectra-backend-clickhouse/**"
+reason = "Backend adapters must not depend on each other"
+
+[[boundaries]]
+from = "spectra-backend-sqlite/**"
+to = "spectra-backend-remote-common/**"
+reason = "Embedded backend must not depend on remote common"
+
+[[boundaries]]
+from = "spectra-backend-sqlite/**"
+to = "spectra/src/**"
+reason = "Backend adapter must not depend on facade"
+
+[[boundaries]]
+from = "spectra-backend-sqlite/**"
+to = "spectra-testkit/**"
+reason = "Backend adapter must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-sqlite/**"
+to = "spectra-e2e/**"
+reason = "Backend adapter must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-sqlite/**"
+to = "spectra-bench/**"
+reason = "Backend adapter must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-remote-common/**"
+to = "spectra-backend-clickhouse/**"
+reason = "Remote common must not depend on thin adapter crates"
+
+[[boundaries]]
+from = "spectra-backend-remote-common/**"
+to = "spectra-backend-tensorbase/**"
+reason = "Remote common must not depend on thin adapter crates"
+
+[[boundaries]]
+from = "spectra-backend-remote-common/**"
+to = "spectra-backend-mem/**"
+reason = "Remote common must not depend on other backends"
+
+[[boundaries]]
+from = "spectra-backend-remote-common/**"
+to = "spectra-backend-sqlite/**"
+reason = "Remote common must not depend on other backends"
+
+[[boundaries]]
+from = "spectra-backend-remote-common/**"
+to = "spectra/src/**"
+reason = "Remote common must not depend on facade"
+
+[[boundaries]]
+from = "spectra-backend-remote-common/**"
+to = "spectra-testkit/**"
+reason = "Remote common must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-remote-common/**"
+to = "spectra-e2e/**"
+reason = "Remote common must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-remote-common/**"
+to = "spectra-bench/**"
+reason = "Remote common must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-clickhouse/**"
+to = "spectra-backend-tensorbase/**"
+reason = "Backend adapters must not depend on each other"
+
+[[boundaries]]
+from = "spectra-backend-clickhouse/**"
+to = "spectra-backend-mem/**"
+reason = "Backend adapters must not depend on each other"
+
+[[boundaries]]
+from = "spectra-backend-clickhouse/**"
+to = "spectra-backend-sqlite/**"
+reason = "Backend adapters must not depend on each other"
+
+[[boundaries]]
+from = "spectra-backend-clickhouse/**"
+to = "spectra/src/**"
+reason = "Backend adapter must not depend on facade"
+
+[[boundaries]]
+from = "spectra-backend-clickhouse/**"
+to = "spectra-testkit/**"
+reason = "Backend adapter must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-clickhouse/**"
+to = "spectra-e2e/**"
+reason = "Backend adapter must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-clickhouse/**"
+to = "spectra-bench/**"
+reason = "Backend adapter must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-tensorbase/**"
+to = "spectra-backend-clickhouse/**"
+reason = "Backend adapters must not depend on each other"
+
+[[boundaries]]
+from = "spectra-backend-tensorbase/**"
+to = "spectra-backend-mem/**"
+reason = "Backend adapters must not depend on each other"
+
+[[boundaries]]
+from = "spectra-backend-tensorbase/**"
+to = "spectra-backend-sqlite/**"
+reason = "Backend adapters must not depend on each other"
+
+[[boundaries]]
+from = "spectra-backend-tensorbase/**"
+to = "spectra/src/**"
+reason = "Backend adapter must not depend on facade"
+
+[[boundaries]]
+from = "spectra-backend-tensorbase/**"
+to = "spectra-testkit/**"
+reason = "Backend adapter must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-tensorbase/**"
+to = "spectra-e2e/**"
+reason = "Backend adapter must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-backend-tensorbase/**"
+to = "spectra-bench/**"
+reason = "Backend adapter must not depend on test harness"
+
+# --- runtime must not depend on test harness ---
+
+[[boundaries]]
+from = "spectra-runtime/**"
+to = "spectra-testkit/**"
+reason = "Runtime must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-runtime/**"
+to = "spectra-e2e/**"
+reason = "Runtime must not depend on test harness"
+
+[[boundaries]]
+from = "spectra-runtime/**"
+to = "spectra-bench/**"
+reason = "Runtime must not depend on test harness"
+
+# --- facade must not depend on test harness ---
+
+[[boundaries]]
+from = "spectra/src/**"
+to = "spectra-testkit/**"
+reason = "Public facade must not depend on internal test crates"
+
+[[boundaries]]
+from = "spectra/src/**"
+to = "spectra-e2e/**"
+reason = "Public facade must not depend on internal test crates"
+
+[[boundaries]]
+from = "spectra/src/**"
+to = "spectra-bench/**"
+reason = "Public facade must not depend on internal test crates"
+
+[revisit]
+trigger = "Raise min_quality_signal as modularity and test coverage improve."

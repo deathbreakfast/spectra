@@ -1,0 +1,92 @@
+[workspace]
+resolver = "2"
+members = [
+    "spectra-core",
+    "spectra-macros",
+    "spectra-backend-mem",
+    "spectra-backend-sqlite",
+    "spectra-backend-remote-common",
+    "spectra-backend-tensorbase",
+    "spectra-backend-clickhouse",
+    "spectra-runtime",
+    "spectra",
+    "spectra-testkit",
+    "spectra-e2e",
+    "spectra-bench",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Typed logging and metrics for Rust services"
+repository = "https://github.com/unified-field-dev/spectra"
+
+[workspace.dependencies]
+spectra-core = { path = "spectra-core", package = "uf-spectra-core" }
+spectra-macros = { path = "spectra-macros" }
+spectra-backend-mem = { path = "spectra-backend-mem" }
+spectra-backend-sqlite = { path = "spectra-backend-sqlite" }
+spectra-backend-remote-common = { path = "spectra-backend-remote-common" }
+spectra-backend-tensorbase = { path = "spectra-backend-tensorbase" }
+spectra-backend-clickhouse = { path = "spectra-backend-clickhouse" }
+spectra-runtime = { path = "spectra-runtime" }
+spectra = { path = "spectra", package = "uf-spectra", default-features = false }
+spectra-testkit = { path = "spectra-testkit" }
+quark = { package = "uf-quark", version = "0.1.1" }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
+significant_drop_tightening = "allow"
+unused_async = "allow"
+unnecessary_wraps = "allow"
+use_self = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+ignored_unit_patterns = "allow"
+needless_pass_by_value = "allow"
+missing_const_for_fn = "allow"
+duration_suboptimal_units = "allow"
+return_self_not_must_use = "allow"
+redundant_pub_crate = "allow"
+uninlined_format_args = "allow"
+option_if_let_else = "allow"
+redundant_closure_for_method_calls = "allow"
+redundant_closure = "allow"
+cast_precision_loss = "allow"
+too_long_first_doc_paragraph = "allow"
+map_unwrap_or = "allow"
+semicolon_if_nothing_returned = "allow"
+match_like_matches_macro = "allow"
+unreadable_literal = "allow"
+unnested_or_patterns = "allow"
+match_same_arms = "allow"
+match_wildcard_for_single_variants = "allow"
+await_holding_lock = "allow"
+future_not_send = "allow"
+no_effect_underscore_binding = "allow"
+float_cmp = "allow"
+default_trait_access = "allow"
+single_match = "allow"
+single_match_else = "allow"
+let_and_return = "allow"
+ptr_as_ptr = "allow"
+manual_let_else = "allow"
+redundant_clone = "warn"
+
+[workspace.lints.rustdoc]
+redundant_explicit_links = "allow"
+broken_intra_doc_links = "warn"
+private_intra_doc_links = "allow"
+
+[workspace.lints.rust]
+missing_docs = "deny"
+unsafe_code = "forbid"

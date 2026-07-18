@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_BUILD_JOBS: 1
+
+jobs:
+  gate-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+      - name: Upstream gate check
+        run: ./scripts/gate-check.sh
+
+  cargo-deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features
+
+  core-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Core crate tests
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-extract
+          cargo test -p uf-spectra-core -p spectra-macros \
+                     -p spectra-backend-mem -p spectra-backend-sqlite \
+                     -p spectra-backend-tensorbase -p spectra-backend-clickhouse \
+                     -p spectra-runtime -p uf-spectra
+      - name: Smoke inventory
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-extract
+          cargo test -p uf-spectra --test smoke_inventory
+      - name: Feature matrix check
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-extract
+          cargo check -p uf-spectra --no-default-features
+          cargo check -p uf-spectra --features mem,sqlite
+
+  testkit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: spectra-testkit tests
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-e2e
+          cargo test -p spectra-testkit
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: spectra-e2e tests
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-e2e
+          cargo test -p spectra-e2e
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Documentation (deny warnings)
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-extract
+          RUSTDOCFLAGS="-D warnings" cargo doc -p uf-spectra --all-features --no-deps
+      - name: Rustdoc examples
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-extract
+          cargo test --doc -p uf-spectra-core
+          cargo test --doc -p spectra-runtime
+
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Runnable examples
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-extract
+          cargo run -p uf-spectra --example quickstart --features mem
+          cargo run -p uf-spectra --example quickstart_transport --features mem
+          cargo run -p uf-spectra --example quickstart_publish_only --features mem
+          cargo run -p uf-spectra --example quickstart_consume_forward --features mem
+          cargo run -p uf-spectra --example quickstart_sqlite --features sqlite
+          cargo run -p uf-spectra --example quickstart_schema_emit --features mem
+          cargo run -p uf-spectra --example quickstart_telemetry --features mem,telemetry-console
+
+  backend-stores:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Storage port contract (embedded backends)
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-extract
+          cargo test -p spectra-backend-mem --test storage_contract
+          cargo test -p spectra-backend-sqlite --test storage_contract
+          cargo test -p spectra-backend-tensorbase --test storage_contract
+          cargo test -p spectra-backend-clickhouse --test storage_contract
+
+  coverage:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Line coverage report (workspace, exclude e2e/bench)
+        run: |
+          export CARGO_BUILD_JOBS=1
+          export CARGO_TARGET_DIR=target-spectra-extract
+          ./scripts/coverage.sh --summary-only -- --test-threads=1
+          ./scripts/coverage.sh --lcov --output-path lcov.info -- --test-threads=1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: lcov.info

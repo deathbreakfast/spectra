@@ -1,0 +1,5 @@
+error: missing `table:`
+ --> tests/ui/fail_schema_missing_table.rs:4:5
+  |
+4 |     BadEvent {
+  |     ^^^^^^^^

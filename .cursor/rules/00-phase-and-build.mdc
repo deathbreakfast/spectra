@@ -1,0 +1,22 @@
+---
+description: Spectra phase scope and build guardrails
+alwaysApply: true
+---
+
+# Phase scope and build guardrails
+
+## Current phase: 6 (complete)
+
+Consumable git pin tag `v0.1.0`. Run `./scripts/verify-release.sh` before any new release tag.
+
+## Build guardrails
+
+1. `export CARGO_BUILD_JOBS=1` on constrained hosts.
+2. `export CARGO_TARGET_DIR=target-spectra-extract` (or `target-spectra-e2e`, `target-spectra-bench`).
+3. Scope narrowly: `-p uf-spectra-core` / `-p uf-spectra-core` path, `-p spectra-e2e`, etc. Facade package is `uf-spectra` (lib `spectra`).
+4. One cargo command at a time on shared dev machines.
+5. Never run parallel heavy `cargo` builds on disk-constrained WSL hosts.
+
+## Read order
+
+README → per-crate README → `cargo doc -p uf-spectra` for the task scope.

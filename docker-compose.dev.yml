@@ -1,0 +1,14 @@
+# Local remote-backend smoke: ClickHouse on http://127.0.0.1:8123
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d clickhouse
+#   export SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123
+#   cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24
+    ports:
+      - "8123:8123"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144

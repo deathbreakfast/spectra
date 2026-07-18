@@ -1,0 +1,5 @@
+error: missing `name:`
+ --> tests/ui/fail_metric_missing_name.rs:4:5
+  |
+4 |     BadMetric {
+  |     ^^^^^^^^^

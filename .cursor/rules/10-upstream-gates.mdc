@@ -1,0 +1,23 @@
+---
+description: Upstream gating requirements — blocks forbidden vocabulary in docs and manifests
+alwaysApply: true
+---
+
+# Upstream gate requirements
+
+Re-check before every release tag. Run `./scripts/gate-check.sh`.
+
+| # | Rule |
+|---|------|
+| 1 | No "zone" layout vocabulary |
+| 2 | No host product identity in committed docs |
+| 3 | No family / host adapter crate names in upstream manifests |
+| 4 | Hero README leads with `spectra_schema!` / `spectra_metric!` |
+| 5 | No maintainer sync / vendor mirror guides in upstream |
+| 6 | Hosts consume via git tag pin |
+| 7 | Use **embedded** / **remote** only — no global Mode enum |
+| 8 | Storage on `Spectra::builder()` — not a Mode enum |
+| 9 | No host DB engine | No host-only embedded DB backend or engine SDK in upstream |
+| 10 | No `DESIGN.md` — architecture lives in README + rustdoc |
+
+When porting from a host workspace in Phase 1+, strip host-only DB storage, product topic scans, and host-specific sink types before committing.

@@ -1,0 +1,22 @@
+[package]
+name = "spectra-backend-remote-common"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared ClickHouse-protocol remote storage logic for Spectra backends"
+publish = false
+
+[dependencies]
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+clickhouse = { version = "0.15", features = ["time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+spectra-core = { workspace = true }
+tokio = { version = "1", features = ["process"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true
