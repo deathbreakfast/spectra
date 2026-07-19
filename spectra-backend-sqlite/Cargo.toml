@@ -18,7 +18,7 @@ tokio = { version = "1", features = ["rt"] }
 [dev-dependencies]
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-spectra-testkit = { workspace = true, features = ["sqlite"] }
+# spectra-testkit is workspace-only (unpublished); restore for local storage_contract tests.
 
 [lints]
 workspace = true
