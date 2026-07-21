@@ -3,12 +3,12 @@ use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
+use spectra::PersistConfig;
 use spectra_testkit::{
     assert_embedded_topology, dw_n, dw_url_fingerprint, install_bench_matrix,
     install_bench_matrix_with_persist, remote_env_ready, remote_url_for, shard_index,
     InstalledSpectra, MatrixSpec, Topology,
 };
-use spectra::PersistConfig;
 
 use crate::cli::CliMatrix;
 use crate::experiments::{ExperimentMeta, ExperimentTrack};
@@ -16,10 +16,11 @@ use crate::report::{BenchReport, HostUtilReport, RootcauseReport, WriteReport};
 use crate::sweep::SweepParams;
 use crate::workload::{
     count_event_rows, count_metric_points, prefill_events, prefill_metrics,
-    run_adapter_counter_firehose, run_batched_durable_counter_firehose, run_durable_counter_firehose,
-    run_durable_event_firehose, run_event_firehose, run_event_queries, run_full_stack_counter_firehose,
-    run_metric_queries, wait_until_event_visible, wait_until_metric_visible,
-    BATCHED_DURABLE_COUNTER_NAME, DURABLE_COUNTER_NAME, DURABLE_EVENT_TABLE,
+    run_adapter_counter_firehose, run_batched_durable_counter_firehose,
+    run_durable_counter_firehose, run_durable_event_firehose, run_event_firehose,
+    run_event_queries, run_full_stack_counter_firehose, run_metric_queries,
+    wait_until_event_visible, wait_until_metric_visible, BATCHED_DURABLE_COUNTER_NAME,
+    DURABLE_COUNTER_NAME, DURABLE_EVENT_TABLE,
 };
 
 pub struct CapacityRunArgs {
@@ -81,22 +82,24 @@ async fn run_write_experiment(
             report.to_json()
         }
         "bm-sw1" | "bm-sw2" | "bm-sw3" => {
-            let fh =
-                run_full_stack_counter_firehose(sweep.concurrency, sweep.duration, drain_ms).await?;
+            let fh = run_full_stack_counter_firehose(sweep.concurrency, sweep.duration, drain_ms)
+                .await?;
             report.achieved_counter_ops_per_sec = Some(fh.achieved_ops_per_sec);
             report.write = Some(to_write_report(&fh));
             report.rootcause = Some(to_rootcause(&fh.rootcause));
             if id == "bm-sw3" && sweep.bench_clients > 1 {
                 report.summary = format!(
                     "{} (client {}/{})",
-                    report.summary, sweep.bench_client_index + 1, sweep.bench_clients
+                    report.summary,
+                    sweep.bench_client_index + 1,
+                    sweep.bench_clients
                 );
             }
             report.to_json()
         }
         "bm-sw4" => {
-            let fh =
-                run_event_firehose(sweep.concurrency, sweep.duration, false, None, drain_ms).await?;
+            let fh = run_event_firehose(sweep.concurrency, sweep.duration, false, None, drain_ms)
+                .await?;
             report.achieved_event_ops_per_sec = Some(fh.achieved_ops_per_sec);
             report.write = Some(to_write_report(&fh));
             report.rootcause = Some(to_rootcause(&fh.rootcause));
@@ -191,15 +194,11 @@ async fn run_batched_durable_counter_experiment(
     report.writer_n = Some(sweep.writer_n);
     let visibility_timeout_ms = visibility_timeout_ms(matrix.topology);
 
-    let fh = run_batched_durable_counter_firehose(
-        &installed.spectra,
-        sweep.concurrency,
-        sweep.duration,
-    )
-    .await?;
+    let fh =
+        run_batched_durable_counter_firehose(&installed.spectra, sweep.concurrency, sweep.duration)
+            .await?;
 
-    let visible =
-        confirm_batched_metric_visibility(installed, visibility_timeout_ms).await?;
+    let visible = confirm_batched_metric_visibility(installed, visibility_timeout_ms).await?;
     report.durable_counter_ops_per_sec = Some(fh.achieved_ops_per_sec);
     report.achieved_counter_ops_per_sec = Some(fh.achieved_ops_per_sec);
     report.visibility_confirmed = Some(visible);
@@ -280,7 +279,7 @@ fn load_host_util() -> Option<Vec<HostUtilReport>> {
 }
 
 fn infer_binding_tier(host_util: &Option<Vec<HostUtilReport>>) -> String {
-    if let Some(tier) = std::env::var("SPECTRA_BENCH_BINDING_TIER").ok() {
+    if let Ok(tier) = std::env::var("SPECTRA_BENCH_BINDING_TIER") {
         if !tier.is_empty() {
             return tier;
         }
@@ -295,7 +294,9 @@ fn infer_binding_tier(host_util: &Option<Vec<HostUtilReport>>) -> String {
         .fold(0.0_f64, f64::max);
     let dw_peak = utils
         .iter()
-        .filter(|u| u.role.contains("dw") || u.role.contains("clickhouse") || u.role.contains("tensorbase"))
+        .filter(|u| {
+            u.role.contains("dw") || u.role.contains("clickhouse") || u.role.contains("tensorbase")
+        })
         .filter_map(|u| u.cpu_peak_pct)
         .fold(0.0_f64, f64::max);
     if writer_peak >= 85.0 && dw_peak < 70.0 {
@@ -377,13 +378,9 @@ async fn run_query_experiment(
                 ));
             }
             "bm-sq3" => {
-                let qr = run_event_queries(
-                    &installed,
-                    depth,
-                    sweep.query_iters,
-                    visibility_timeout_ms,
-                )
-                .await?;
+                let qr =
+                    run_event_queries(&installed, depth, sweep.query_iters, visibility_timeout_ms)
+                        .await?;
                 report.query_events_ms = Some(qr.stats);
                 report.points_returned = Some(qr.points_returned);
             }

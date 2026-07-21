@@ -8,7 +8,9 @@
 //! - Default event query limit is 1000 rows when `limit` is unset.
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -42,13 +44,21 @@ CREATE TABLE IF NOT EXISTS spectra_events (
 CREATE INDEX IF NOT EXISTS idx_spectra_events_table_ts ON spectra_events(table_name, ts);
 ";
 
+fn map_sqlite(e: rusqlite::Error) -> Error {
+    let message = e.to_string();
+    Error::storage_source(message, e)
+}
+
+fn map_join(e: tokio::task::JoinError) -> Error {
+    Error::storage_source("sqlite worker join failed", e)
+}
+
 fn open_and_migrate(path: &Path, ddl: &str) -> Result<Connection> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(Error::Io)?;
     }
-    let conn = Connection::open(path).map_err(|e| Error::Internal(e.to_string()))?;
-    conn.execute_batch(ddl)
-        .map_err(|e| Error::Internal(e.to_string()))?;
+    let conn = Connection::open(path).map_err(map_sqlite)?;
+    conn.execute_batch(ddl).map_err(map_sqlite)?;
     Ok(conn)
 }
 
@@ -59,7 +69,7 @@ fn ts_to_rfc3339(ts: DateTime<Utc>) -> String {
 fn parse_ts(s: &str) -> Result<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(s)
         .map(|dt| dt.with_timezone(&Utc))
-        .map_err(|e| Error::Internal(e.to_string()))
+        .map_err(|e| Error::internal(format!("invalid metric/event timestamp: {e}")))
 }
 
 fn labels_match(labels: &Value, matchers: &[LabelMatcher]) -> bool {
@@ -174,16 +184,16 @@ impl MetricsStorageBackend for SqliteMetricsBackend {
         let labels = labels.to_string();
         let ts = ts_to_rfc3339(ts);
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().expect("sqlite metrics lock");
+            let conn = conn.lock();
             conn.execute(
                 "INSERT INTO spectra_metrics (name, kind, value, labels, ts, correlation_id) VALUES (?1, 'counter', ?2, ?3, ?4, NULL)",
                 params![name, delta as f64, labels, ts],
             )
-            .map_err(|e| Error::Internal(e.to_string()))?;
+            .map_err(map_sqlite)?;
             Ok(())
         })
         .await
-        .map_err(|e| Error::Internal(e.to_string()))?
+        .map_err(map_join)?
     }
 
     async fn record_gauge(
@@ -198,16 +208,16 @@ impl MetricsStorageBackend for SqliteMetricsBackend {
         let labels = labels.to_string();
         let ts = ts_to_rfc3339(ts);
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().expect("sqlite metrics lock");
+            let conn = conn.lock();
             conn.execute(
                 "INSERT INTO spectra_metrics (name, kind, value, labels, ts, correlation_id) VALUES (?1, 'gauge', ?2, ?3, ?4, NULL)",
                 params![name, value, labels, ts],
             )
-            .map_err(|e| Error::Internal(e.to_string()))?;
+            .map_err(map_sqlite)?;
             Ok(())
         })
         .await
-        .map_err(|e| Error::Internal(e.to_string()))?
+        .map_err(map_join)?
     }
 
     async fn query_range(&self, query: MetricsQueryRange) -> Result<Vec<MetricPoint>> {
@@ -217,12 +227,12 @@ impl MetricsStorageBackend for SqliteMetricsBackend {
         let end = ts_to_rfc3339(query.end);
         let label_matchers = query.label_matchers.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().expect("sqlite metrics lock");
+            let conn = conn.lock();
             let mut stmt = conn
                 .prepare(
                     "SELECT value, labels, ts FROM spectra_metrics WHERE name = ?1 AND ts >= ?2 AND ts <= ?3 ORDER BY ts ASC",
                 )
-                .map_err(|e| Error::Internal(e.to_string()))?;
+                .map_err(map_sqlite)?;
             let rows = stmt
                 .query_map(params![name, start, end], |row| {
                     let value: f64 = row.get(0)?;
@@ -230,12 +240,11 @@ impl MetricsStorageBackend for SqliteMetricsBackend {
                     let ts: String = row.get(2)?;
                     Ok((value, labels, ts))
                 })
-                .map_err(|e| Error::Internal(e.to_string()))?;
+                .map_err(map_sqlite)?;
             let mut out = Vec::new();
             for row in rows {
-                let (value, labels, ts) = row.map_err(|e| Error::Internal(e.to_string()))?;
-                let labels: Value = serde_json::from_str(&labels)
-                    .map_err(|e| Error::Internal(e.to_string()))?;
+                let (value, labels, ts) = row.map_err(map_sqlite)?;
+                let labels: Value = serde_json::from_str(&labels)?;
                 if labels_match(&labels, &label_matchers) {
                     out.push(MetricPoint {
                         ts: parse_ts(&ts)?,
@@ -247,7 +256,7 @@ impl MetricsStorageBackend for SqliteMetricsBackend {
             Ok(out)
         })
         .await
-        .map_err(|e| Error::Internal(e.to_string()))?
+        .map_err(map_join)?
     }
 }
 
@@ -356,16 +365,16 @@ impl EventStorageBackend for SqliteEventsBackend {
         let ts = ts_to_rfc3339(ts);
         let cid = correlation_id.map(str::to_string);
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().expect("sqlite events lock");
+            let conn = conn.lock();
             conn.execute(
                 "INSERT INTO spectra_events (table_name, fields, ts, correlation_id) VALUES (?1, ?2, ?3, ?4)",
                 params![table, fields, ts, cid],
             )
-            .map_err(|e| Error::Internal(e.to_string()))?;
+            .map_err(map_sqlite)?;
             Ok(())
         })
         .await
-        .map_err(|e| Error::Internal(e.to_string()))?
+        .map_err(map_join)?
     }
 
     async fn query_rows(&self, filter: EventsQueryFilter) -> Result<Vec<EventRow>> {
@@ -376,32 +385,29 @@ impl EventStorageBackend for SqliteEventsBackend {
         // Fetch table/time-scoped candidates, then apply shared filter/sort/pagination
         // so operator semantics match mem and remote-common mem store.
         let out = tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().expect("sqlite events lock");
+            let conn = conn.lock();
             let sql = "SELECT fields, ts FROM spectra_events WHERE table_name = ?1 \
                  AND (?2 IS NULL OR ts >= ?2) AND (?3 IS NULL OR ts <= ?3)";
-            let mut stmt = conn
-                .prepare(sql)
-                .map_err(|e| Error::Internal(e.to_string()))?;
+            let mut stmt = conn.prepare(sql).map_err(map_sqlite)?;
             let rows = stmt
                 .query_map(params![table, start, end], |row| {
                     let fields: String = row.get(0)?;
                     let ts: String = row.get(1)?;
                     Ok((fields, ts))
                 })
-                .map_err(|e| Error::Internal(e.to_string()))?;
+                .map_err(map_sqlite)?;
             let mut out = Vec::new();
             for row in rows {
-                let (fields, ts) = row.map_err(|e| Error::Internal(e.to_string()))?;
+                let (fields, ts) = row.map_err(map_sqlite)?;
                 out.push(EventRow {
                     ts: parse_ts(&ts)?,
-                    fields: serde_json::from_str(&fields)
-                        .map_err(|e| Error::Internal(e.to_string()))?,
+                    fields: serde_json::from_str(&fields)?,
                 });
             }
             Ok::<_, Error>(out)
         })
         .await
-        .map_err(|e| Error::Internal(e.to_string()))??;
+        .map_err(map_join)??;
         let mut filter = filter;
         if filter.limit.is_none() {
             filter.limit = Some(1000);
@@ -409,7 +415,10 @@ impl EventStorageBackend for SqliteEventsBackend {
         Ok(spectra_core::finalize_event_rows(out, &filter))
     }
 
-    async fn query_aggregate(&self, _filter: EventsAggregateFilter) -> Result<EventAggregateResult> {
+    async fn query_aggregate(
+        &self,
+        _filter: EventsAggregateFilter,
+    ) -> Result<EventAggregateResult> {
         Ok(EventAggregateResult::TimeSeries {
             series: vec![],
             headline: vec![],

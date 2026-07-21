@@ -68,7 +68,12 @@ pub async fn run_adapter_counter_firehose(
     while tasks.join_next().await.is_some() {}
 
     let elapsed = started.elapsed();
-    summarize(total.load(Ordering::Relaxed), errors.load(Ordering::Relaxed), elapsed, before)
+    summarize(
+        total.load(Ordering::Relaxed),
+        errors.load(Ordering::Relaxed),
+        elapsed,
+        before,
+    )
 }
 
 pub async fn run_full_stack_counter_firehose(
@@ -185,7 +190,12 @@ pub async fn run_event_firehose(
     }
 
     let elapsed = started.elapsed();
-    summarize(total.load(Ordering::Relaxed), errors.load(Ordering::Relaxed), elapsed, before)
+    summarize(
+        total.load(Ordering::Relaxed),
+        errors.load(Ordering::Relaxed),
+        elapsed,
+        before,
+    )
 }
 
 fn summarize(
@@ -211,7 +221,10 @@ fn summarize(
     })
 }
 
-pub(crate) fn diff_rootcause(before: RootcauseSnapshot, after: RootcauseSnapshot) -> RootcauseSnapshot {
+pub(crate) fn diff_rootcause(
+    before: RootcauseSnapshot,
+    after: RootcauseSnapshot,
+) -> RootcauseSnapshot {
     RootcauseSnapshot {
         emits_counter: after.emits_counter.saturating_sub(before.emits_counter),
         emits_gauge: after.emits_gauge.saturating_sub(before.emits_gauge),

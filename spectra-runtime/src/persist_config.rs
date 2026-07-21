@@ -8,10 +8,18 @@ pub enum PersistOverflow {
     /// Non-blocking `try_send`; drop the job and increment `persist_queue_drops` (default).
     #[default]
     Drop,
-    /// Apply backpressure: block the calling thread until the job is enqueued (or the queue closes).
+    /// Apply backpressure until the job is enqueued (or the queue closes).
     ///
-    /// When called from a Tokio worker thread, uses `block_in_place` so the runtime can schedule
-    /// other work while waiting. Prefer this for scripts that must not lose emits under load.
+    /// **Runtime contract:** true blocking backpressure requires a **multi-thread** Tokio
+    /// runtime (`rt-multi-thread`). On a multi-thread worker the sink uses
+    /// [`tokio::task::block_in_place`] so other tasks can run while waiting.
+    ///
+    /// Outside any Tokio runtime, uses [`tokio::sync::mpsc::Sender::blocking_send`].
+    ///
+    /// On a **current-thread** Tokio runtime, `block_in_place` is unsafe/unavailable, so
+    /// Spectra degrades to non-blocking `try_send` (same drop + `persist_queue_drops`
+    /// accounting as [`Self::Drop`]) and logs a warning. Prefer [`Self::Drop`] explicitly
+    /// on current-thread runtimes, or use a multi-thread runtime when loss is unacceptable.
     Block,
 }
 

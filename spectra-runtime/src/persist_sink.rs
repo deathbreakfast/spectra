@@ -50,12 +50,10 @@ impl PersistHandle {
         self.tx
             .send(PersistJob::Flush(ack_tx))
             .await
-            .map_err(|_| {
-                spectra_core::Error::Internal("persist queue closed during flush".into())
-            })?;
+            .map_err(|_| spectra_core::Error::internal("persist queue closed during flush"))?;
         ack_rx
             .await
-            .map_err(|_| spectra_core::Error::Internal("persist flush ack dropped".into()))
+            .map_err(|_| spectra_core::Error::internal("persist flush ack dropped"))
     }
 }
 
@@ -65,7 +63,8 @@ impl PersistHandle {
 /// [`crate::SpectraBuilder::persist`]), not environment variables.
 ///
 /// Default overflow policy is [`PersistOverflow::Drop`] (non-blocking; drops counted via
-/// `persist_queue_drops`). Use [`PersistOverflow::Block`] for backpressure.
+/// `persist_queue_drops`). Use [`PersistOverflow::Block`] for backpressure on a
+/// **multi-thread** Tokio runtime (see that variant's docs for current-thread degradation).
 /// Call [`PersistHandle::flush`] (or [`crate::Spectra::flush_persist`]) to wait for durability.
 pub struct StoragePersistSink {
     inner: Option<Arc<dyn SpectraSink>>,
@@ -144,12 +143,12 @@ impl StoragePersistSink {
 
                 if batch_enabled {
                     if let Err(e) = flush_batch(&router_worker, batch).await {
-                        log::warn!("[spectra:persist] batch flush: {e}");
+                        tracing::warn!(error = %e, "persist batch flush failed");
                     }
                 } else {
                     for job in batch {
                         if let Err(e) = run_job(&router_worker, job).await {
-                            log::warn!("[spectra:persist] {e}");
+                            tracing::warn!(error = %e, "persist job failed");
                         }
                     }
                 }
@@ -240,21 +239,48 @@ fn enqueue(tx: &mpsc::Sender<PersistJob>, job: PersistJob, overflow: PersistOver
         PersistOverflow::Drop => {
             if tx.try_send(job).is_err() {
                 record_persist_queue_drop();
-                log::warn!("[spectra:persist] queue full; dropping job");
+                tracing::warn!("persist queue full; dropping job");
             }
         }
         PersistOverflow::Block => {
-            let send_result = if tokio::runtime::Handle::try_current().is_ok() {
-                tokio::task::block_in_place(|| {
-                    let handle = tokio::runtime::Handle::current();
-                    handle.block_on(tx.send(job))
-                })
-            } else {
-                tx.blocking_send(job)
+            let closed_or_failed = match tokio::runtime::Handle::try_current() {
+                Ok(handle) => match handle.runtime_flavor() {
+                    tokio::runtime::RuntimeFlavor::MultiThread => {
+                        tokio::task::block_in_place(|| handle.block_on(tx.send(job)).is_err())
+                    }
+                    tokio::runtime::RuntimeFlavor::CurrentThread => {
+                        // block_in_place is unavailable; degrade to non-blocking try_send.
+                        match tx.try_send(job) {
+                            Ok(()) => false,
+                            Err(mpsc::error::TrySendError::Full(_)) => {
+                                record_persist_queue_drop();
+                                tracing::warn!(
+                                    "PersistOverflow::Block on current-thread runtime cannot apply \
+                                     backpressure; queue full, dropping job"
+                                );
+                                false
+                            }
+                            Err(mpsc::error::TrySendError::Closed(_)) => true,
+                        }
+                    }
+                    _ => match tx.try_send(job) {
+                        Ok(()) => false,
+                        Err(mpsc::error::TrySendError::Full(_)) => {
+                            record_persist_queue_drop();
+                            tracing::warn!(
+                                "PersistOverflow::Block on unsupported runtime flavor; queue full, \
+                                 dropping job"
+                            );
+                            false
+                        }
+                        Err(mpsc::error::TrySendError::Closed(_)) => true,
+                    },
+                },
+                Err(_) => tx.blocking_send(job).is_err(),
             };
-            if send_result.is_err() {
+            if closed_or_failed {
                 record_persist_queue_drop();
-                log::warn!("[spectra:persist] queue closed; dropping job");
+                tracing::warn!("persist queue closed; dropping job");
             }
         }
     }
@@ -308,8 +334,10 @@ async fn flush_batch(router: &SpectraRouter, batch: Vec<PersistJob>) -> spectra_
         Arc::as_ptr(arc) as *const () as usize
     }
 
-    let mut metrics_buckets: HashMap<usize, (spectra_core::SharedMetricsBackend, Vec<MetricWriteRow>)> =
-        HashMap::new();
+    let mut metrics_buckets: HashMap<
+        usize,
+        (spectra_core::SharedMetricsBackend, Vec<MetricWriteRow>),
+    > = HashMap::new();
     let mut event_buckets: HashMap<usize, (spectra_core::SharedEventBackend, Vec<EventWriteRow>)> =
         HashMap::new();
 

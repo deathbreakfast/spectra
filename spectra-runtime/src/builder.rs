@@ -11,11 +11,11 @@ use crate::persist_config::PersistConfig;
 use crate::persist_sink::{PersistHandle, StoragePersistSink};
 
 #[cfg(feature = "telemetry-console")]
-use std::path::Path;
-#[cfg(feature = "telemetry-console")]
 use crate::async_writer::OffThreadSpectraSink;
 #[cfg(feature = "telemetry-console")]
 use spectra_core::NdjsonFileSink;
+#[cfg(feature = "telemetry-console")]
+use std::path::Path;
 
 /// Handle to an installed process-wide Spectra runtime.
 ///
@@ -240,10 +240,10 @@ impl SpectraBuilder {
     pub fn build(self) -> spectra_core::Result<Spectra> {
         let metrics = self
             .metrics
-            .ok_or_else(|| spectra_core::Error::Internal("metrics_backend is required".into()))?;
+            .ok_or_else(|| spectra_core::Error::config("metrics_backend is required"))?;
         let events = self
             .events
-            .ok_or_else(|| spectra_core::Error::Internal("events_backend is required".into()))?;
+            .ok_or_else(|| spectra_core::Error::config("events_backend is required"))?;
 
         let router = build_router(metrics, events);
         let router = Arc::new(router);
@@ -272,10 +272,9 @@ impl SpectraBuilder {
                 }
                 (false, Some(inner)) => (inner, None),
                 (false, None) => {
-                    return Err(spectra_core::Error::Internal(
+                    return Err(spectra_core::Error::config(
                         "SpectraBuilder: persist is disabled but no sink was configured; \
-                     call .sink(...) or enable persist"
-                            .into(),
+                     call .sink(...) or enable persist",
                     ));
                 }
             };
@@ -289,10 +288,7 @@ impl SpectraBuilder {
     }
 }
 
-fn build_router(
-    metrics: SharedMetricsBackend,
-    events: SharedEventBackend,
-) -> SpectraRouter {
+fn build_router(metrics: SharedMetricsBackend, events: SharedEventBackend) -> SpectraRouter {
     let router = SpectraRouter::with_defaults(Arc::clone(&metrics), Arc::clone(&events));
     for name in SchemaRegistry::global().list_schemas() {
         let Some(meta) = SchemaRegistry::global().get_schema(name) else {
@@ -461,13 +457,7 @@ mod tests {
             .persist_disabled()
             .build();
         assert!(result.is_err());
-        assert!(
-            result
-                .err()
-                .expect("err")
-                .to_string()
-                .contains("no sink")
-        );
+        assert!(result.err().expect("err").to_string().contains("no sink"));
     }
 
     #[tokio::test]

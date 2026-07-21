@@ -147,10 +147,20 @@ async fn event_sort_and_pagination(events: &dyn EventStorageBackend) -> Result<(
         .append_row(table, &json!({"name": "b"}), ts, None)
         .await?;
     events
-        .append_row(table, &json!({"name": "a"}), ts + Duration::milliseconds(1), None)
+        .append_row(
+            table,
+            &json!({"name": "a"}),
+            ts + Duration::milliseconds(1),
+            None,
+        )
         .await?;
     events
-        .append_row(table, &json!({"name": "c"}), ts + Duration::milliseconds(2), None)
+        .append_row(
+            table,
+            &json!({"name": "c"}),
+            ts + Duration::milliseconds(2),
+            None,
+        )
         .await?;
     let rows = events
         .query_rows(EventsQueryFilter {
@@ -174,20 +184,10 @@ async fn event_partition_filter(events: &dyn EventStorageBackend) -> Result<()> 
     let ts = Utc::now();
     let table = "contract_partition";
     events
-        .append_row(
-            table,
-            &json!({"partition": "hourly", "msg": "h"}),
-            ts,
-            None,
-        )
+        .append_row(table, &json!({"partition": "hourly", "msg": "h"}), ts, None)
         .await?;
     events
-        .append_row(
-            table,
-            &json!({"partition": "daily", "msg": "d"}),
-            ts,
-            None,
-        )
+        .append_row(table, &json!({"partition": "daily", "msg": "d"}), ts, None)
         .await?;
     let rows = events
         .query_rows(EventsQueryFilter {
@@ -206,12 +206,7 @@ async fn event_partition_filter(events: &dyn EventStorageBackend) -> Result<()> 
 async fn label_filter_hit(metrics: &dyn MetricsStorageBackend) -> Result<()> {
     let ts = Utc::now();
     metrics
-        .record_counter(
-            "contract_labeled",
-            &json!({"region": "us-west"}),
-            1,
-            ts,
-        )
+        .record_counter("contract_labeled", &json!({"region": "us-west"}), 1, ts)
         .await?;
     let points = metrics
         .query_range(MetricsQueryRange {

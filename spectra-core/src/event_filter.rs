@@ -87,22 +87,36 @@ pub fn matches_filter_item(row: &EventRow, item: &GridFilterItem) -> bool {
                 .as_ref()
                 .is_some_and(|f| f.to_lowercase().ends_with(&v.to_lowercase()))
         }),
-        GridFilterOperator::IsEmpty => {
-            field_str.as_ref().is_none_or(|s| s.is_empty())
-        }
-        GridFilterOperator::IsNotEmpty => {
-            field_str.as_ref().is_some_and(|s| !s.is_empty())
-        }
-        GridFilterOperator::GreaterThan => cmp_ordered(field_num, field_str.as_deref(), &item.value, std::cmp::Ordering::Greater, false),
-        GridFilterOperator::GreaterThanOrEqual => {
-            cmp_ordered(field_num, field_str.as_deref(), &item.value, std::cmp::Ordering::Greater, true)
-        }
-        GridFilterOperator::LessThan => {
-            cmp_ordered(field_num, field_str.as_deref(), &item.value, std::cmp::Ordering::Less, false)
-        }
-        GridFilterOperator::LessThanOrEqual => {
-            cmp_ordered(field_num, field_str.as_deref(), &item.value, std::cmp::Ordering::Less, true)
-        }
+        GridFilterOperator::IsEmpty => field_str.as_ref().is_none_or(|s| s.is_empty()),
+        GridFilterOperator::IsNotEmpty => field_str.as_ref().is_some_and(|s| !s.is_empty()),
+        GridFilterOperator::GreaterThan => cmp_ordered(
+            field_num,
+            field_str.as_deref(),
+            &item.value,
+            std::cmp::Ordering::Greater,
+            false,
+        ),
+        GridFilterOperator::GreaterThanOrEqual => cmp_ordered(
+            field_num,
+            field_str.as_deref(),
+            &item.value,
+            std::cmp::Ordering::Greater,
+            true,
+        ),
+        GridFilterOperator::LessThan => cmp_ordered(
+            field_num,
+            field_str.as_deref(),
+            &item.value,
+            std::cmp::Ordering::Less,
+            false,
+        ),
+        GridFilterOperator::LessThanOrEqual => cmp_ordered(
+            field_num,
+            field_str.as_deref(),
+            &item.value,
+            std::cmp::Ordering::Less,
+            true,
+        ),
     }
 }
 
@@ -297,7 +311,10 @@ mod tests {
         let mut rows = vec![
             row(t1, json!({"name": "b", "partition": "hourly"})),
             row(t0, json!({"name": "a", "partition": "daily"})),
-            row(t0 + chrono::Duration::seconds(2), json!({"name": "c", "partition": "hourly"})),
+            row(
+                t0 + chrono::Duration::seconds(2),
+                json!({"name": "c", "partition": "hourly"}),
+            ),
         ];
         assert!(!row_matches_partition(&rows[1], Some("hourly")));
         rows.retain(|r| row_matches_partition(r, Some("hourly")));
@@ -311,8 +328,14 @@ mod tests {
         let t0 = base_ts();
         let rows = vec![
             row(t0, json!({"msg": "keep", "partition": "hourly"})),
-            row(t0 + chrono::Duration::seconds(1), json!({"msg": "drop", "partition": "hourly"})),
-            row(t0 + chrono::Duration::seconds(2), json!({"msg": "keep", "partition": "daily"})),
+            row(
+                t0 + chrono::Duration::seconds(1),
+                json!({"msg": "drop", "partition": "hourly"}),
+            ),
+            row(
+                t0 + chrono::Duration::seconds(2),
+                json!({"msg": "keep", "partition": "daily"}),
+            ),
         ];
         let filter = EventsQueryFilter {
             table: "t".into(),

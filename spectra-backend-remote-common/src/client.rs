@@ -5,6 +5,11 @@ use std::path::{Path, PathBuf};
 use clickhouse::Client as HttpClient;
 use spectra_core::{Error, Result};
 
+pub(crate) fn map_remote(e: impl std::error::Error + Send + Sync + 'static) -> Error {
+    let message = e.to_string();
+    Error::storage_source(message, e)
+}
+
 /// Shared client for remote ClickHouse-compatible storage engines.
 #[derive(Clone)]
 pub struct RemoteClient {
@@ -12,6 +17,7 @@ pub struct RemoteClient {
 }
 
 #[derive(Clone)]
+#[allow(clippy::large_enum_variant)] // Http client is large; Native is the small arm
 enum ClientInner {
     Http(HttpClient),
     Native(NativeEndpoint),
@@ -58,11 +64,7 @@ impl RemoteClient {
     /// Execute DDL or administrative SQL.
     pub async fn execute(&self, sql: &str) -> Result<()> {
         match &self.inner {
-            ClientInner::Http(client) => client
-                .query(sql)
-                .execute()
-                .await
-                .map_err(|e| Error::Internal(e.to_string())),
+            ClientInner::Http(client) => client.query(sql).execute().await.map_err(map_remote),
             ClientInner::Native(endpoint) => run_native_execute(endpoint, sql).await,
         }
     }
@@ -81,7 +83,7 @@ impl RemoteClient {
                     .query(sql)
                     .fetch_all::<Row3>()
                     .await
-                    .map_err(|e| Error::Internal(e.to_string()))?;
+                    .map_err(map_remote)?;
                 Ok(rows.into_iter().map(|r| (r.c0, r.c1, r.c2)).collect())
             }
             ClientInner::Native(endpoint) => {
@@ -114,7 +116,7 @@ impl RemoteClient {
                     .query(sql)
                     .fetch_all::<MetricRow>()
                     .await
-                    .map_err(|e| Error::Internal(e.to_string()))?;
+                    .map_err(map_remote)?;
                 Ok(rows
                     .into_iter()
                     .map(|r| (r.value, r.labels, r.ts))
@@ -127,9 +129,7 @@ impl RemoteClient {
                     if cols.len() < 3 {
                         continue;
                     }
-                    let value = cols[0]
-                        .parse::<f64>()
-                        .map_err(|e| Error::Internal(e.to_string()))?;
+                    let value = cols[0].parse::<f64>().map_err(map_remote)?;
                     out.push((value, cols[1].clone(), cols[2].clone()));
                 }
                 Ok(out)
@@ -150,7 +150,7 @@ impl RemoteClient {
                     .query(sql)
                     .fetch_all::<EventRow>()
                     .await
-                    .map_err(|e| Error::Internal(e.to_string()))?;
+                    .map_err(map_remote)?;
                 Ok(rows.into_iter().map(|r| (r.fields, r.ts)).collect())
             }
             ClientInner::Native(endpoint) => {
@@ -173,10 +173,7 @@ impl RemoteClient {
         match &self.inner {
             ClientInner::Http(client) => Ok(RemoteInsert {
                 inner: InsertInner::Http(
-                    client
-                        .insert("spectra_metrics")
-                        .await
-                        .map_err(|e| Error::Internal(e.to_string()))?,
+                    client.insert("spectra_metrics").await.map_err(map_remote)?,
                 ),
             }),
             ClientInner::Native(endpoint) => Ok(RemoteInsert {
@@ -194,10 +191,7 @@ impl RemoteClient {
         match &self.inner {
             ClientInner::Http(client) => Ok(RemoteInsert {
                 inner: InsertInner::Http(
-                    client
-                        .insert("spectra_events")
-                        .await
-                        .map_err(|e| Error::Internal(e.to_string()))?,
+                    client.insert("spectra_events").await.map_err(map_remote)?,
                 ),
             }),
             ClientInner::Native(endpoint) => Ok(RemoteInsert {
@@ -211,23 +205,15 @@ impl RemoteClient {
     }
 }
 
+#[allow(private_bounds)] // InsertSqlRow is an internal row helper, not part of the public API
 impl<T> RemoteInsert<T>
 where
-    T: clickhouse::RowOwned
-        + clickhouse::RowWrite
-        + Clone
-        + Send
-        + Sync
-        + 'static
-        + InsertSqlRow,
+    T: clickhouse::RowOwned + clickhouse::RowWrite + Clone + Send + Sync + 'static + InsertSqlRow,
 {
     /// Append one row to the insert stream.
     pub async fn write(&mut self, row: &T) -> Result<()> {
         match &mut self.inner {
-            InsertInner::Http(insert) => insert
-                .write(row)
-                .await
-                .map_err(|e| Error::Internal(e.to_string())),
+            InsertInner::Http(insert) => insert.write(row).await.map_err(map_remote),
             InsertInner::Native { rows, .. } => {
                 rows.push(row.clone());
                 Ok(())
@@ -238,10 +224,7 @@ where
     /// Finish the insert stream.
     pub async fn end(self) -> Result<()> {
         match self.inner {
-            InsertInner::Http(insert) => insert
-                .end()
-                .await
-                .map_err(|e| Error::Internal(e.to_string())),
+            InsertInner::Http(insert) => insert.end().await.map_err(map_remote),
             InsertInner::Native {
                 endpoint,
                 table,
@@ -301,7 +284,7 @@ pub fn datetime_to_ch_ts(ts: chrono::DateTime<chrono::Utc>) -> String {
 pub fn parse_rfc3339_ts(s: &str) -> Result<chrono::DateTime<chrono::Utc>> {
     chrono::DateTime::parse_from_rfc3339(s)
         .map(|dt| dt.with_timezone(&chrono::Utc))
-        .map_err(|e| Error::Internal(e.to_string()))
+        .map_err(|e| Error::internal(format!("invalid remote timestamp: {e}")))
 }
 
 fn parse_host_port(addr: &str) -> Result<(String, u16)> {
@@ -309,7 +292,7 @@ fn parse_host_port(addr: &str) -> Result<(String, u16)> {
         (
             host.to_string(),
             port.parse::<u16>()
-                .map_err(|e| Error::Internal(e.to_string()))?,
+                .map_err(|e| Error::config(format!("invalid tcp:// port in remote URL: {e}")))?,
         )
     } else {
         (addr.to_string(), 9528)
@@ -375,8 +358,8 @@ fn resolve_clickhouse_client() -> Result<PathBuf> {
     if let Ok(path) = which_client("clickhouse-client") {
         return Ok(path);
     }
-    Err(Error::Internal(
-        "tcp:// URLs require clickhouse-client (set SPECTRA_CLICKHOUSE_CLIENT_PATH or install in PATH)".into(),
+    Err(Error::config(
+        "tcp:// URLs require clickhouse-client (set SPECTRA_CLICKHOUSE_CLIENT_PATH or install in PATH)",
     ))
 }
 
@@ -384,9 +367,9 @@ fn which_client(name: &str) -> Result<PathBuf> {
     let output = std::process::Command::new("which")
         .arg(name)
         .output()
-        .map_err(|e| Error::Internal(e.to_string()))?;
+        .map_err(Error::Io)?;
     if !output.status.success() {
-        return Err(Error::Internal(format!("{name} not found")));
+        return Err(Error::config(format!("{name} not found")));
     }
     let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
     Ok(PathBuf::from(path))
@@ -402,9 +385,9 @@ async fn run_native_execute(endpoint: &NativeEndpoint, sql: &str) -> Result<()> 
         .arg(sql)
         .output()
         .await
-        .map_err(|e| Error::Internal(e.to_string()))?;
+        .map_err(Error::Io)?;
     if !output.status.success() {
-        return Err(Error::Internal(format!(
+        return Err(Error::storage(format!(
             "clickhouse-client execute failed: {}",
             String::from_utf8_lossy(&output.stderr)
         )));
@@ -422,9 +405,9 @@ async fn run_native_select(endpoint: &NativeEndpoint, sql: &str) -> Result<Vec<V
         .arg(sql)
         .output()
         .await
-        .map_err(|e| Error::Internal(e.to_string()))?;
+        .map_err(Error::Io)?;
     if !output.status.success() {
-        return Err(Error::Internal(format!(
+        return Err(Error::storage(format!(
             "clickhouse-client query failed: {}",
             String::from_utf8_lossy(&output.stderr)
         )));

@@ -11,9 +11,7 @@ async fn sqlite_storage_contract() {
     let dir = TempDir::new().expect("tempdir");
     let metrics_path = dir.path().join("metrics.db");
     let events_path = dir.path().join("events.db");
-    let metrics = Arc::new(
-        SqliteMetricsBackend::new(&metrics_path).expect("sqlite metrics"),
-    );
+    let metrics = Arc::new(SqliteMetricsBackend::new(&metrics_path).expect("sqlite metrics"));
     let events = Arc::new(SqliteEventsBackend::new(&events_path).expect("sqlite events"));
     run_storage_contract(metrics, events)
         .await

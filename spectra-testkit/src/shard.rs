@@ -55,9 +55,8 @@ pub fn remote_url_for(storage: StorageAdapter) -> Result<String> {
 
 /// Short fingerprint of a DW URL (host:port hash) for report stamping.
 pub fn dw_url_fingerprint(url: &str) -> String {
-    let host_port = url_host_port(url);
     let mut hasher = DefaultHasher::new();
-    host_port.hash(&mut hasher);
+    url_host_port(url).hash(&mut hasher);
     format!("{:x}", hasher.finish() & 0xffff_ffff)
 }
 
@@ -75,19 +74,17 @@ fn resolve_sharded_url(base_key: &str, shard: u32, n: u32) -> Result<String> {
     // n>1: require indexed URLs for every shard so misconfig fails loudly.
     for i in 0..n {
         let key = format!("{base_key}_{i}");
-        if std::env::var(&key).ok().filter(|s| !s.is_empty()).is_none() {
+        if std::env::var(&key).ok().is_none_or(|s| s.is_empty()) {
             bail!("{key} required when SPECTRA_BENCH_DW_N={n} (got missing/empty for shard {i})");
         }
     }
-    std::env::var(&indexed).with_context(|| format!("{indexed} required when SPECTRA_BENCH_DW_N={n}"))
+    std::env::var(&indexed)
+        .with_context(|| format!("{indexed} required when SPECTRA_BENCH_DW_N={n}"))
 }
 
 fn url_host_port(url: &str) -> String {
     // http://host:8123/... or tcp://host:9528
-    let rest = url
-        .split("://")
-        .nth(1)
-        .unwrap_or(url);
+    let rest = url.split("://").nth(1).unwrap_or(url);
     rest.split('/').next().unwrap_or(rest).to_string()
 }
 

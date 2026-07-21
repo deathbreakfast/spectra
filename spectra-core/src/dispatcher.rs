@@ -1,5 +1,7 @@
 use std::cell::Cell;
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::{Arc, OnceLock};
+
+use parking_lot::RwLock;
 
 use crate::sink::SpectraSink;
 
@@ -15,12 +17,11 @@ fn sink_slot() -> &'static RwLock<Option<Arc<dyn SpectraSink>>> {
 
 /// Install the process-wide sink (typically once at server boot).
 pub fn set_sink(sink: Arc<dyn SpectraSink>) {
-    let mut guard = sink_slot().write().expect("spectra-core sink lock");
-    *guard = Some(sink);
+    *sink_slot().write() = Some(sink);
 }
 
 fn current_sink() -> Option<Arc<dyn SpectraSink>> {
-    sink_slot().read().ok()?.clone()
+    sink_slot().read().clone()
 }
 
 /// Returns true when dispatch should proceed (not re-entrant).

@@ -63,8 +63,9 @@ pub use registry::{
 };
 pub use rootcause::{
     elapsed_ms, enabled as rootcause_enabled, persist_queue_drop_count, record_ndjson_append,
-    record_persist_queue_drop, record_storage_batch_write_events, record_storage_batch_write_metrics,
-    record_storage_write_events, record_storage_write_metrics, RootcauseSnapshot,
+    record_persist_queue_drop, record_storage_batch_write_events,
+    record_storage_batch_write_metrics, record_storage_write_events, record_storage_write_metrics,
+    RootcauseSnapshot,
 };
 pub use router::SpectraRouter;
 pub use schema::{EVENTS_TABLE, METRICS_TABLE};

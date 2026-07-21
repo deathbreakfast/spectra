@@ -1,3 +1,6 @@
 # Cargo build artifacts (any depth — nested dirs under infra/ etc.)
 **/target/
 **/target-*/
+
+# Local Sentrux quality-gate config (dev artifact; not part of upstream)
+.sentrux/

@@ -1,5 +1,5 @@
-use super::{current_emit_ts, drain};
 use super::scopes::{request_scope_gated, worker_scope_gated};
+use super::{current_emit_ts, drain};
 use crate::sink::SpectraSink;
 use crate::sinks::{NoOpSink, RecordingSink};
 use chrono::Utc;

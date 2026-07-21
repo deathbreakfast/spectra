@@ -20,6 +20,8 @@
 //!   (`sqlite`), or remote (`clickhouse`, `tensorbase`).
 //! - **Emit controls** — global and per-name level gates, sampling, optional request/job buffers,
 //!   and async batched persist (overrides schema defaults).
+//! - **Diagnostics** — library crates emit structured `tracing` events; hosts initialize a
+//!   `tracing_subscriber` (see the `quickstart` example).
 //! - **Query API** — read metrics and events through [`SpectraRouter`] with label and time-range
 //!   filters.
 //! - **Direct or distributed wiring** — one process can write storage, or many publishers can
@@ -449,6 +451,8 @@ mod schemas;
 pub mod helpers;
 pub mod topics;
 
+/// Re-export for schema macro `inventory::submit!` expansions.
+pub use spectra_core::inventory;
 pub use spectra_core::{
     self, try_log_event_at, try_log_event_now, try_record_counter, try_record_counter_at,
     try_record_counter_now, try_record_gauge_at, try_record_gauge_now, ChainedSink, Error,
@@ -456,8 +460,6 @@ pub use spectra_core::{
     SchemaMetadata, SchemaMetadataInit, SchemaRegistry, SpectraEvent, SpectraLevel, SpectraRouter,
     SpectraSink,
 };
-/// Re-export for schema macro `inventory::submit!` expansions.
-pub use spectra_core::inventory;
 pub use spectra_macros::{spectra_metric, spectra_schema};
 pub use spectra_runtime::{
     PersistConfig, PersistHandle, PersistOverflow, Spectra, SpectraBuilder, StoragePersistSink,

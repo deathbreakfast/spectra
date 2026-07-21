@@ -307,7 +307,10 @@ mod tests {
             },
             || async {
                 assert!(drop_gauge("example_backlog", &[("topic", "t")], 1.0));
-                assert!(drop_counter("example_publishes", &[("topic", "t"), ("mode", "local")]));
+                assert!(drop_counter(
+                    "example_publishes",
+                    &[("topic", "t"), ("mode", "local")]
+                ));
                 assert!(drop_counter("example_db_reads", &[]));
                 assert!(!drop_counter("example_db_writes", &[]));
             },

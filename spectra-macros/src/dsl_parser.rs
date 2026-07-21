@@ -20,7 +20,9 @@ impl SpectraLevelSpec {
             "Trace" => Ok(Self::Trace),
             other => Err(syn::Error::new(
                 ident.span(),
-                format!("unknown Spectra level `{other}`; expected Error, Warn, Info, Debug, or Trace"),
+                format!(
+                    "unknown Spectra level `{other}`; expected Error, Warn, Info, Debug, or Trace"
+                ),
             )),
         }
     }

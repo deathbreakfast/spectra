@@ -28,6 +28,29 @@ jobs:
           command: check
           arguments: --all-features
 
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo clippy (workspace)
+        run: |
+          export CARGO_TARGET_DIR=target-spectra-extract
+          cargo clippy --workspace --all-targets -- -D warnings
+
   core-tests:
     runs-on: ubuntu-latest
     steps:

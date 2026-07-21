@@ -2,6 +2,8 @@
 //!
 //! **Internal** — consumed by `spectra-e2e` and `spectra-bench`; not part of the public host
 //! integration surface.
+
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 //!
 //! Installs `spectra::Spectra::builder()` for one [MatrixSpec](crate::MatrixSpec) row and executes
 //! declarative [ScenarioSpec](crate::ScenarioSpec) steps.
@@ -29,10 +31,8 @@ pub use catalog::{
     catalog_entries, remote_catalog_entries, run_catalog_scenario, run_remote_catalog_scenario,
     CatalogEntry, PathKind,
 };
-pub use fixtures::{assert_embedded_topology, remote_env_ready, validate_matrix_env};
-pub use shard::{
-    client_index, clickhouse_url_sharded, dw_n, dw_url_fingerprint, remote_url_for, shard_index,
-    tensorbase_url_sharded,
+pub use fixtures::{
+    assert_embedded_topology, clickhouse_url, remote_env_ready, tensorbase_url, validate_matrix_env,
 };
 pub use matrix::{
     ci_embedded_rows, ci_recording_rows, ci_telemetry_rows, remote_ingest_rows, MatrixSpec,
@@ -40,10 +40,17 @@ pub use matrix::{
 };
 pub use runner::{DriverKind, ScenarioResult, ScenarioRunner, StepTiming};
 pub use scenario::{ScenarioSpec, ScenarioStep, DEFAULT_VISIBILITY_TIMEOUT_MS};
+pub use shard::{
+    clickhouse_url_sharded, client_index, dw_n, dw_url_fingerprint, remote_url_for, shard_index,
+    tensorbase_url_sharded,
+};
 pub use storage_contract::run_storage_contract;
 
 /// Install one matrix row for bench workloads (holds process-wide test lock).
-pub async fn install_bench_matrix(matrix: MatrixSpec, slug_suffix: &str) -> Result<InstalledSpectra> {
+pub async fn install_bench_matrix(
+    matrix: MatrixSpec,
+    slug_suffix: &str,
+) -> Result<InstalledSpectra> {
     install_bench_matrix_with_persist(matrix, slug_suffix, None).await
 }
 

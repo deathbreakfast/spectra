@@ -143,29 +143,25 @@ impl RootcauseSnapshot {
             return;
         }
         let s = Self::capture();
-        log::info!(
-            "[rootcause] span=spectra.per_increment label={label} \
-             emits_counter={} emits_gauge={} emits_event={} \
-             storage_writes_metrics={} storage_writes_events={} \
-             storage_batch_flushes_metrics={} storage_batch_flushes_events={} storage_wall_ms={:.3} \
-             ndjson_appends={} ndjson_wall_ms={:.3} inline_wall_ms={:.3} \
-             buffer_pushes={} buffer_drains={} drain_wall_ms={:.3} aggregate_coalesced={} persist_queue_drops={}",
-            s.emits_counter,
-            s.emits_gauge,
-            s.emits_event,
-            s.storage_writes_metrics,
-            s.storage_writes_events,
-            s.storage_batch_flushes_metrics,
-            s.storage_batch_flushes_events,
-            s.storage_wall_ms,
-            s.ndjson_appends,
-            s.ndjson_wall_ms,
-            s.inline_wall_ms,
-            s.buffer_pushes,
-            s.buffer_drains,
-            s.drain_wall_ms,
-            s.aggregate_coalesced,
-            s.persist_queue_drops,
+        tracing::info!(
+            label,
+            emits_counter = s.emits_counter,
+            emits_gauge = s.emits_gauge,
+            emits_event = s.emits_event,
+            storage_writes_metrics = s.storage_writes_metrics,
+            storage_writes_events = s.storage_writes_events,
+            storage_batch_flushes_metrics = s.storage_batch_flushes_metrics,
+            storage_batch_flushes_events = s.storage_batch_flushes_events,
+            storage_wall_ms = s.storage_wall_ms,
+            ndjson_appends = s.ndjson_appends,
+            ndjson_wall_ms = s.ndjson_wall_ms,
+            inline_wall_ms = s.inline_wall_ms,
+            buffer_pushes = s.buffer_pushes,
+            buffer_drains = s.buffer_drains,
+            drain_wall_ms = s.drain_wall_ms,
+            aggregate_coalesced = s.aggregate_coalesced,
+            persist_queue_drops = s.persist_queue_drops,
+            "spectra.per_increment"
         );
     }
 
@@ -175,29 +171,25 @@ impl RootcauseSnapshot {
             return;
         }
         let d = Self::delta(before, after);
-        log::info!(
-            "[rootcause] span=spectra.per_increment label={label} \
-             emits_counter={} emits_gauge={} emits_event={} \
-             storage_writes_metrics={} storage_writes_events={} \
-             storage_batch_flushes_metrics={} storage_batch_flushes_events={} storage_wall_ms={:.3} \
-             ndjson_appends={} ndjson_wall_ms={:.3} inline_wall_ms={:.3} \
-             buffer_pushes={} buffer_drains={} drain_wall_ms={:.3} aggregate_coalesced={} persist_queue_drops={}",
-            d.emits_counter,
-            d.emits_gauge,
-            d.emits_event,
-            d.storage_writes_metrics,
-            d.storage_writes_events,
-            d.storage_batch_flushes_metrics,
-            d.storage_batch_flushes_events,
-            d.storage_wall_ms,
-            d.ndjson_appends,
-            d.ndjson_wall_ms,
-            d.inline_wall_ms,
-            d.buffer_pushes,
-            d.buffer_drains,
-            d.drain_wall_ms,
-            d.aggregate_coalesced,
-            d.persist_queue_drops,
+        tracing::info!(
+            label,
+            emits_counter = d.emits_counter,
+            emits_gauge = d.emits_gauge,
+            emits_event = d.emits_event,
+            storage_writes_metrics = d.storage_writes_metrics,
+            storage_writes_events = d.storage_writes_events,
+            storage_batch_flushes_metrics = d.storage_batch_flushes_metrics,
+            storage_batch_flushes_events = d.storage_batch_flushes_events,
+            storage_wall_ms = d.storage_wall_ms,
+            ndjson_appends = d.ndjson_appends,
+            ndjson_wall_ms = d.ndjson_wall_ms,
+            inline_wall_ms = d.inline_wall_ms,
+            buffer_pushes = d.buffer_pushes,
+            buffer_drains = d.buffer_drains,
+            drain_wall_ms = d.drain_wall_ms,
+            aggregate_coalesced = d.aggregate_coalesced,
+            persist_queue_drops = d.persist_queue_drops,
+            "spectra.per_increment_delta"
         );
     }
 }

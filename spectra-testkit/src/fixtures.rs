@@ -76,7 +76,10 @@ pub fn telemetry_dir(prefix: &str) -> Result<(TempDir, PathBuf)> {
 }
 
 /// Ensure storage adapter choice matches the declared host topology.
-pub fn assert_embedded_topology(storage: StorageAdapter, topology: crate::matrix::Topology) -> Result<()> {
+pub fn assert_embedded_topology(
+    storage: StorageAdapter,
+    topology: crate::matrix::Topology,
+) -> Result<()> {
     use crate::matrix::Topology;
     match (storage, topology) {
         (StorageAdapter::Mem | StorageAdapter::Sqlite, Topology::Embedded) => Ok(()),

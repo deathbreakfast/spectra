@@ -5,18 +5,19 @@
 //!
 //! - Data is process-local and lost on exit; not suitable for production durability.
 //! - `query_aggregate` supports `Count` measure only; other measures return empty series.
-//! - Uses `RwLock`; contended writes may block the async runtime thread briefly.
+//! - Uses `parking_lot::RwLock`; contended writes may block the async runtime thread briefly.
 
 use std::collections::HashMap;
-use std::sync::RwLock;
+
+use parking_lot::RwLock;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 use spectra_core::{
-    EventAggregateResult, EventMeasure, EventRow, EventStorageBackend,
-    EventsAggregateFilter, EventsQueryFilter, LabelMatcher, MetricPoint, MetricPointDto,
-    MetricsQueryRange, MetricsStorageBackend, Result, StorageEngineType, TimeSeriesDto,
+    EventAggregateResult, EventMeasure, EventRow, EventStorageBackend, EventsAggregateFilter,
+    EventsQueryFilter, LabelMatcher, MetricPoint, MetricPointDto, MetricsQueryRange,
+    MetricsStorageBackend, Result, StorageEngineType, TimeSeriesDto,
 };
 
 /// Non-durable in-memory metrics storage.
@@ -109,7 +110,7 @@ impl MetricsStorageBackend for MemMetricsBackend {
         delta: i64,
         ts: DateTime<Utc>,
     ) -> Result<()> {
-        let mut guard = self.points.write().expect("mem metrics lock");
+        let mut guard = self.points.write();
         guard.push(StoredMetric {
             name: name.to_string(),
             value: delta as f64,
@@ -126,7 +127,7 @@ impl MetricsStorageBackend for MemMetricsBackend {
         value: f64,
         ts: DateTime<Utc>,
     ) -> Result<()> {
-        let mut guard = self.points.write().expect("mem metrics lock");
+        let mut guard = self.points.write();
         guard.push(StoredMetric {
             name: name.to_string(),
             value,
@@ -137,7 +138,7 @@ impl MetricsStorageBackend for MemMetricsBackend {
     }
 
     async fn query_range(&self, query: MetricsQueryRange) -> Result<Vec<MetricPoint>> {
-        let guard = self.points.read().expect("mem metrics lock");
+        let guard = self.points.read();
         Ok(guard
             .iter()
             .filter(|p| p.name == query.metric_name)
@@ -241,7 +242,7 @@ impl EventStorageBackend for MemEventsBackend {
         ts: DateTime<Utc>,
         _correlation_id: Option<&str>,
     ) -> Result<()> {
-        let mut guard = self.rows.write().expect("mem events lock");
+        let mut guard = self.rows.write();
         guard
             .entry(table.to_string())
             .or_default()
@@ -253,7 +254,7 @@ impl EventStorageBackend for MemEventsBackend {
     }
 
     async fn query_rows(&self, filter: EventsQueryFilter) -> Result<Vec<EventRow>> {
-        let guard = self.rows.read().expect("mem events lock");
+        let guard = self.rows.read();
         let Some(rows) = guard.get(&filter.table) else {
             return Ok(Vec::new());
         };

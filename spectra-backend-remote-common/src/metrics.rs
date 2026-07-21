@@ -6,11 +6,13 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use spectra_core::{
-    Error, MetricPoint, MetricWriteRow, MetricsQueryRange, MetricsStorageBackend, Result,
+    MetricPoint, MetricWriteRow, MetricsQueryRange, MetricsStorageBackend, Result,
     StorageEngineType,
 };
 
-use crate::client::{datetime_to_ch_ts, parse_rfc3339_ts, MetricInsertRow, RemoteClient};
+use crate::client::{
+    datetime_to_ch_ts, map_remote, parse_rfc3339_ts, MetricInsertRow, RemoteClient,
+};
 use crate::mem_store::MemStore;
 use crate::query_sql;
 
@@ -73,11 +75,8 @@ impl MetricsStorageBackend for RemoteMetricsBackend {
                         correlation_id: None,
                     })
                     .await
-                    .map_err(|e| Error::Internal(e.to_string()))?;
-                insert
-                    .end()
-                    .await
-                    .map_err(|e| Error::Internal(e.to_string()))?;
+                    .map_err(map_remote)?;
+                insert.end().await.map_err(map_remote)?;
                 Ok(())
             }
         }
@@ -104,11 +103,8 @@ impl MetricsStorageBackend for RemoteMetricsBackend {
                         correlation_id: None,
                     })
                     .await
-                    .map_err(|e| Error::Internal(e.to_string()))?;
-                insert
-                    .end()
-                    .await
-                    .map_err(|e| Error::Internal(e.to_string()))?;
+                    .map_err(map_remote)?;
+                insert.end().await.map_err(map_remote)?;
                 Ok(())
             }
         }
@@ -149,12 +145,9 @@ impl MetricsStorageBackend for RemoteMetricsBackend {
                             correlation_id: row.correlation_id.clone(),
                         })
                         .await
-                        .map_err(|e| Error::Internal(e.to_string()))?;
+                        .map_err(map_remote)?;
                 }
-                insert
-                    .end()
-                    .await
-                    .map_err(|e| Error::Internal(e.to_string()))?;
+                insert.end().await.map_err(map_remote)?;
                 Ok(())
             }
         }
@@ -179,8 +172,7 @@ impl MetricsStorageBackend for RemoteMetricsBackend {
                     out.push(MetricPoint {
                         ts: parse_rfc3339_ts(&ts)?,
                         value,
-                        labels: serde_json::from_str(&labels)
-                            .map_err(|e| Error::Internal(e.to_string()))?,
+                        labels: serde_json::from_str(&labels)?,
                     });
                 }
                 if !query.label_matchers.is_empty() {

@@ -29,7 +29,11 @@ async fn main() -> spectra::Result<()> {
     try_record_counter_now("cache_hits", &[("region", "us-west")], 1);
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-    assert_eq!(transport.counters().len(), 1, "transport sink should receive emit");
+    assert_eq!(
+        transport.counters().len(),
+        1,
+        "transport sink should receive emit"
+    );
 
     let now = spectra_core::current_emit_ts();
     let points = spectra
@@ -43,7 +47,7 @@ async fn main() -> spectra::Result<()> {
         .await?;
     assert_eq!(points.len(), 1, "storage backend should persist emit");
 
-    println!(
+    eprintln!(
         "transport + persist OK: {} counter(s) in transport, {} point(s) in storage",
         transport.counters().len(),
         points.len()

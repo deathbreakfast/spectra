@@ -11,6 +11,11 @@ use spectra_core::try_record_counter_now;
 
 #[tokio::main]
 async fn main() -> spectra::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_writer(std::io::stderr)
+        .init();
+
     let dir = std::env::temp_dir().join("spectra-quickstart-telemetry");
     std::fs::create_dir_all(&dir)?;
 
@@ -24,7 +29,7 @@ async fn main() -> spectra::Result<()> {
     try_record_counter_now("telemetry_demo", &[], 1);
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    println!(
+    eprintln!(
         "telemetry NDJSON written under {} (metrics.ndjson, events.ndjson)",
         dir.display()
     );

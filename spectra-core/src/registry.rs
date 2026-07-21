@@ -163,15 +163,20 @@ impl SchemaRegistry {
     }
 
     /// Installs a custom registry as the process-global instance (call once).
+    ///
+    /// Panics if called more than once. Prefer letting [`Self::global`] auto-discover
+    /// schemas unless the host needs a custom registry.
     pub fn set_global(registry: SchemaRegistry) {
+        // Process invariant: double install indicates a host boot bug.
+        #[allow(clippy::expect_used)]
         GLOBAL_REGISTRY
             .set(registry)
             .expect("SchemaRegistry::set_global called more than once");
     }
 
     /// Returns the process-global registry, auto-discovering on first access.
-    pub fn global() -> &'static SchemaRegistry {
-        GLOBAL_REGISTRY.get_or_init(SchemaRegistry::auto_discover)
+    pub fn global() -> &'static Self {
+        GLOBAL_REGISTRY.get_or_init(Self::auto_discover)
     }
 
     /// Registers a leaked schema metadata entry.

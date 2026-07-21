@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use spectra::helpers::{PlatformSmokeCounterRecorder, PlatformSmokeEventLogger};
-use spectra::{MemEventsBackend, MemMetricsBackend, Spectra, SchemaRegistry};
+use spectra::{MemEventsBackend, MemMetricsBackend, SchemaRegistry, Spectra};
 use spectra_core::{
     current_emit_ts, EventStorageBackend, MetricsQueryRange, MetricsStorageBackend,
 };

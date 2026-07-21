@@ -10,8 +10,7 @@ use std::sync::Arc;
 use spectra::helpers::{PlatformSmokeCounterRecorder, PlatformSmokeEventLogger};
 use spectra::{Spectra, TensorBaseEventsBackend, TensorBaseMetricsBackend};
 use spectra_core::{
-    current_emit_ts, EventsQueryFilter, MetricsQueryRange, SharedEventBackend,
-    SharedMetricsBackend,
+    current_emit_ts, EventsQueryFilter, MetricsQueryRange, SharedEventBackend, SharedMetricsBackend,
 };
 
 #[tokio::main]
@@ -21,8 +20,7 @@ async fn main() -> spectra::Result<()> {
         std::process::exit(1);
     });
 
-    let metrics: SharedMetricsBackend =
-        Arc::new(TensorBaseMetricsBackend::connect(&url).await?);
+    let metrics: SharedMetricsBackend = Arc::new(TensorBaseMetricsBackend::connect(&url).await?);
     let events: SharedEventBackend = Arc::new(TensorBaseEventsBackend::connect(&url).await?);
 
     let spectra = Spectra::builder()
@@ -56,7 +54,7 @@ async fn main() -> spectra::Result<()> {
         })
         .await?;
 
-    println!(
+    eprintln!(
         "tensorbase emit OK: {} metric point(s), {} event row(s)",
         points.len(),
         event_rows.len()

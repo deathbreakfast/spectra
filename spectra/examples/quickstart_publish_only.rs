@@ -52,7 +52,7 @@ async fn main() -> spectra::Result<()> {
         "publisher process must not persist when persist_disabled"
     );
 
-    println!(
+    eprintln!(
         "publish-only OK: {} counter(s) on transport, {} storage point(s)",
         transport.counters().len(),
         points.len()

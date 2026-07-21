@@ -71,7 +71,12 @@ pub async fn run_durable_counter_firehose(
     while tasks.join_next().await.is_some() {}
 
     let elapsed = started.elapsed();
-    summarize_durable(total.load(Ordering::Relaxed), errors.load(Ordering::Relaxed), elapsed, before)
+    summarize_durable(
+        total.load(Ordering::Relaxed),
+        errors.load(Ordering::Relaxed),
+        elapsed,
+        before,
+    )
 }
 
 /// Adapter-direct event firehose: awaited `append_row` successes = durable ops.
@@ -130,7 +135,12 @@ pub async fn run_durable_event_firehose(
     while tasks.join_next().await.is_some() {}
 
     let elapsed = started.elapsed();
-    summarize_durable(total.load(Ordering::Relaxed), errors.load(Ordering::Relaxed), elapsed, before)
+    summarize_durable(
+        total.load(Ordering::Relaxed),
+        errors.load(Ordering::Relaxed),
+        elapsed,
+        before,
+    )
 }
 
 /// L2 batched durable counter: `try_record_counter_now` → persist queue → `flush_persist`.

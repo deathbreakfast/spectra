@@ -9,6 +9,10 @@ export CARGO_BUILD_JOBS=1 CARGO_TARGET_DIR=target-spectra-extract
 
 ./scripts/gate-check.sh
 
+# Format and lint (CI gates)
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+
 # Unit and integration tests (scope narrowly on shared dev machines)
 cargo test -p uf-spectra-core -p spectra-macros \
            -p spectra-backend-mem -p spectra-backend-sqlite \
@@ -51,12 +55,23 @@ SPECTRA_TENSORBASE_URL=tcp://127.0.0.1:9528 cargo run -p uf-spectra --example qu
 
 Full remote gate (EC2): [`infra/aws/spectra/README.md`](infra/aws/spectra/README.md).
 
+## Lint policy
+
+- Clippy: `all` + `pedantic` + `nursery`, with `-D warnings` in CI.
+- Restriction lints: `unwrap_used`, `expect_used`, `dbg_macro`, `print_stdout` (tests exempt via [`clippy.toml`](clippy.toml)).
+- Workspace allows stay limited to low-signal pedantic noise (casts, `must_use_candidate`, doc detail lints) — see root [`Cargo.toml`](Cargo.toml) `[workspace.lints.clippy]`.
+- Prefer fixing code over new `#[allow(clippy::…)]`; justified exceptions go in root `Cargo.toml` or `clippy.toml`.
+- Do **not** re-allow `await_holding_lock` or `future_not_send` without fixing the underlying issue.
+- Cast and doc-detail pedantic lints stay allowed until a dedicated audit/rustdoc pass; do not flip them without fixing call sites.
+- Prefer [`SpectraRouter::try_global`](spectra-core/src/router.rs) in library code; panicking [`SpectraRouter::global`](spectra-core/src/router.rs) is for hosts/examples after install.
+
 ## Documentation expectations
 
 - Workspace `missing_docs = deny` — all public items need doc comments.
 - User-facing paths (root README, `spectra` crate rustdoc, per-crate README) should avoid internal delivery jargon.
 - Add runnable examples or rustdoc `# Examples` when introducing new integrator-facing APIs.
 - Run `./scripts/gate-check.sh` before any release tag.
+- Library crates emit structured `tracing` events; hosts initialize `tracing_subscriber` (see `quickstart` example).
 
 ## Build guardrails
 

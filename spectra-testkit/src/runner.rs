@@ -128,7 +128,11 @@ async fn execute_step(
             PlatformSmokeEventLogger::log(message.clone());
             Ok(())
         }
-        ScenarioStep::EmitCounter { name, labels, delta } => {
+        ScenarioStep::EmitCounter {
+            name,
+            labels,
+            delta,
+        } => {
             let pairs: Vec<(&str, &str)> = labels
                 .iter()
                 .map(|(k, v)| (k.as_str(), v.as_str()))
@@ -136,7 +140,11 @@ async fn execute_step(
             try_record_counter_now(name, &pairs, *delta);
             Ok(())
         }
-        ScenarioStep::EmitGauge { name, labels, value } => {
+        ScenarioStep::EmitGauge {
+            name,
+            labels,
+            value,
+        } => {
             let pairs: Vec<(&str, &str)> = labels
                 .iter()
                 .map(|(k, v)| (k.as_str(), v.as_str()))
@@ -226,9 +234,7 @@ async fn execute_step(
                 if *expected == 0 {
                     return Ok(());
                 }
-                return Err(
-                    "AssertTransportCounterCount requires recording transport".into(),
-                );
+                return Err("AssertTransportCounterCount requires recording transport".into());
             }
             let sink = installed
                 .transport
@@ -247,9 +253,7 @@ async fn execute_step(
             labels,
             expected,
             timeout_ms,
-        } => {
-            wait_until_metric_count(installed, name, labels, *expected, *timeout_ms, mode).await
-        }
+        } => wait_until_metric_count(installed, name, labels, *expected, *timeout_ms, mode).await,
         ScenarioStep::WaitUntilEventCount {
             table,
             expected,
@@ -278,7 +282,10 @@ async fn wait_until_metric_count(
         if Instant::now() >= deadline {
             break;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(VISIBILITY_POLL_INTERVAL_MS)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(
+            VISIBILITY_POLL_INTERVAL_MS,
+        ))
+        .await;
     }
     if mode == DriverKind::Benchmark {
         return Ok(());
@@ -308,7 +315,10 @@ async fn wait_until_event_count(
         if Instant::now() >= deadline {
             break;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(VISIBILITY_POLL_INTERVAL_MS)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(
+            VISIBILITY_POLL_INTERVAL_MS,
+        ))
+        .await;
     }
     if mode == DriverKind::Benchmark {
         return Ok(());

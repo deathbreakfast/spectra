@@ -1,5 +1,15 @@
 //! Spectra matrix performance CLI (BM-S*).
 
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::print_stdout,
+    clippy::print_stderr,
+    clippy::ref_option,
+    clippy::field_reassign_with_default,
+    clippy::manual_is_multiple_of
+)]
+
 mod capacity;
 mod cli;
 mod experiments;

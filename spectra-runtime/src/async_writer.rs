@@ -63,6 +63,8 @@ impl OffThreadSpectraSink {
         let ndjson = Arc::new(ndjson);
         let (tx, rx) = mpsc::sync_channel(CHANNEL_CAPACITY);
         let ndjson_for_thread = Arc::clone(&ndjson);
+        // Process invariant: failing to spawn the writer thread is unrecoverable at boot.
+        #[allow(clippy::expect_used)]
         let writer = thread::Builder::new()
             .name("spectra-async-writer".into())
             .spawn(move || writer_loop(rx, ndjson_for_thread))
@@ -136,10 +138,10 @@ fn try_enqueue(tx: &SyncSender<EmitJob>, job: EmitJob) {
     match tx.try_send(job) {
         Ok(()) => {}
         Err(TrySendError::Full(_)) => {
-            log::warn!("[spectra:async_writer] emit queue full; dropping telemetry job");
+            tracing::warn!("async writer emit queue full; dropping telemetry job");
         }
         Err(TrySendError::Disconnected(_)) => {
-            log::warn!("[spectra:async_writer] emit queue disconnected");
+            tracing::warn!("async writer emit queue disconnected");
         }
     }
 }
