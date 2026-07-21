@@ -20,7 +20,7 @@
 //!   (`sqlite`), or remote (`clickhouse`, `tensorbase`).
 //! - **Emit controls** — global and per-name level gates, sampling, optional request/job buffers,
 //!   and async batched persist (overrides schema defaults).
-//! - **Diagnostics** — library crates emit structured [`tracing`] events; hosts initialize a
+//! - **Diagnostics** — library crates emit structured `tracing` events; hosts initialize a
 //!   `tracing_subscriber` (see the `quickstart` example).
 //! - **Query API** — read metrics and events through [`SpectraRouter`] with label and time-range
 //!   filters.
