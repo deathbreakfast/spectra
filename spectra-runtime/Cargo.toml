@@ -9,10 +9,10 @@ readme = "README.md"
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
-log = "0.4"
 serde_json = "1"
 spectra-core = { workspace = true }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+tracing = { workspace = true }
 
 [features]
 default = []

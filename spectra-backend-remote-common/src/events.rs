@@ -6,11 +6,13 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use spectra_core::{
-    Error, EventAggregateResult, EventRow, EventStorageBackend, EventWriteRow,
-    EventsAggregateFilter, EventsQueryFilter, Result, StorageEngineType,
+    EventAggregateResult, EventRow, EventStorageBackend, EventWriteRow, EventsAggregateFilter,
+    EventsQueryFilter, Result, StorageEngineType,
 };
 
-use crate::client::{datetime_to_ch_ts, parse_rfc3339_ts, EventInsertRow, RemoteClient};
+use crate::client::{
+    datetime_to_ch_ts, map_remote, parse_rfc3339_ts, EventInsertRow, RemoteClient,
+};
 use crate::mem_store::MemStore;
 use crate::query_sql;
 
@@ -71,11 +73,8 @@ impl EventStorageBackend for RemoteEventsBackend {
                         correlation_id: correlation_id.map(str::to_string),
                     })
                     .await
-                    .map_err(|e| Error::Internal(e.to_string()))?;
-                insert
-                    .end()
-                    .await
-                    .map_err(|e| Error::Internal(e.to_string()))?;
+                    .map_err(map_remote)?;
+                insert.end().await.map_err(map_remote)?;
                 Ok(())
             }
         }
@@ -103,12 +102,9 @@ impl EventStorageBackend for RemoteEventsBackend {
                             correlation_id: row.correlation_id.clone(),
                         })
                         .await
-                        .map_err(|e| Error::Internal(e.to_string()))?;
+                        .map_err(map_remote)?;
                 }
-                insert
-                    .end()
-                    .await
-                    .map_err(|e| Error::Internal(e.to_string()))?;
+                insert.end().await.map_err(map_remote)?;
                 Ok(())
             }
         }
@@ -132,8 +128,7 @@ impl EventStorageBackend for RemoteEventsBackend {
                 for (fields, ts) in rows {
                     out.push(EventRow {
                         ts: parse_rfc3339_ts(&ts)?,
-                        fields: serde_json::from_str(&fields)
-                            .map_err(|e| Error::Internal(e.to_string()))?,
+                        fields: serde_json::from_str(&fields)?,
                     });
                 }
                 Ok(out)
@@ -141,7 +136,10 @@ impl EventStorageBackend for RemoteEventsBackend {
         }
     }
 
-    async fn query_aggregate(&self, _filter: EventsAggregateFilter) -> Result<EventAggregateResult> {
+    async fn query_aggregate(
+        &self,
+        _filter: EventsAggregateFilter,
+    ) -> Result<EventAggregateResult> {
         Ok(EventAggregateResult::TimeSeries {
             series: vec![],
             headline: vec![],

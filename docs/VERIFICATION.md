@@ -11,6 +11,10 @@ export CARGO_TARGET_DIR=target-spectra-extract
 # Upstream gates
 ./scripts/gate-check.sh
 
+# Format + Clippy (CI gates)
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+
 # Unit + integration (exclude e2e/bench drivers)
 cargo test --workspace --exclude spectra-e2e --exclude spectra-bench
 

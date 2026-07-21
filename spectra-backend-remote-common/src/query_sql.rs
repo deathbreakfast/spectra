@@ -1,8 +1,6 @@
 //! SQL fragments for remote event queries.
 
-use spectra_core::{
-    EventsQueryFilter, GridFilterItem, GridFilterOperator, GridLogicOperator,
-};
+use spectra_core::{EventsQueryFilter, GridFilterItem, GridFilterOperator, GridLogicOperator};
 
 pub fn escape_str(s: &str) -> String {
     s.replace('\\', "\\\\").replace('\'', "\\'")
@@ -72,9 +70,9 @@ fn filter_item_clause(item: &GridFilterItem) -> Option<String> {
             .as_str()
             .map(|v| format!("{path} = '{}'", escape_str(v)))
             .or_else(|| {
-                item.value.as_f64().map(|v| {
-                    format!("toFloat64OrZero({path}) = {v}")
-                })
+                item.value
+                    .as_f64()
+                    .map(|v| format!("toFloat64OrZero({path}) = {v}"))
             }),
         GridFilterOperator::DoesNotEqual => item
             .value
@@ -89,18 +87,14 @@ fn filter_item_clause(item: &GridFilterItem) -> Option<String> {
             .value
             .as_str()
             .map(|v| format!("positionCaseInsensitive({path}, '{}') > 0", escape_str(v))),
-        GridFilterOperator::StartsWith => item.value.as_str().map(|v| {
-            format!(
-                "startsWith(lower({path}), lower('{}'))",
-                escape_str(v)
-            )
-        }),
-        GridFilterOperator::EndsWith => item.value.as_str().map(|v| {
-            format!(
-                "endsWith(lower({path}), lower('{}'))",
-                escape_str(v)
-            )
-        }),
+        GridFilterOperator::StartsWith => item
+            .value
+            .as_str()
+            .map(|v| format!("startsWith(lower({path}), lower('{}'))", escape_str(v))),
+        GridFilterOperator::EndsWith => item
+            .value
+            .as_str()
+            .map(|v| format!("endsWith(lower({path}), lower('{}'))", escape_str(v))),
         GridFilterOperator::IsEmpty => Some(format!("({path} = '' OR isNull({path}))")),
         GridFilterOperator::IsNotEmpty => Some(format!("({path} != '' AND isNotNull({path}))")),
         GridFilterOperator::GreaterThan => item

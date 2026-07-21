@@ -16,7 +16,10 @@ pub fn event_inventory(spec: &EventSchemaSpec) -> TokenStream {
     let description_tokens = optional_description(spec.description.as_ref());
     let level = level_tokens(spec.level);
     let sample_rate = spec.default_sample_rate.unwrap_or(1.0);
-    let store_lit = LitStr::new(spec.store.as_deref().unwrap_or("default"), Span::call_site());
+    let store_lit = LitStr::new(
+        spec.store.as_deref().unwrap_or("default"),
+        Span::call_site(),
+    );
 
     let field_meta: Vec<_> = spec
         .fields
@@ -70,7 +73,10 @@ pub fn metric_inventory(spec: &MetricSchemaSpec) -> TokenStream {
     let description_tokens = optional_description(spec.description.as_ref());
     let level = level_tokens(spec.level);
     let sample_rate = spec.default_sample_rate.unwrap_or(1.0);
-    let store_lit = LitStr::new(spec.store.as_deref().unwrap_or("default"), Span::call_site());
+    let store_lit = LitStr::new(
+        spec.store.as_deref().unwrap_or("default"),
+        Span::call_site(),
+    );
     let coalesce_tokens = match spec.coalesce_ms {
         Some(ms) => quote! { Some(#ms) },
         None => quote! { None },

@@ -1,4 +1,4 @@
-use spectra::{spectra_metric};
+use spectra::spectra_metric;
 
 spectra_metric! {
     PlatformSmokeCounter {

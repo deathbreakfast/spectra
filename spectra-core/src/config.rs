@@ -1,7 +1,9 @@
 //! Runtime Spectra emit-volume configuration (`SPECTRA_LEVEL`, per-name overrides, TOML).
 
 use std::collections::HashMap;
-use std::sync::{OnceLock, RwLock};
+use std::sync::OnceLock;
+
+use parking_lot::RwLock;
 
 use crate::registry::{SchemaMetadata, SchemaRegistry, SpectraLevel};
 
@@ -109,7 +111,7 @@ fn merge_toml(config: &mut SpectraConfig, contents: &str) {
     let parsed: toml::Value = match contents.parse() {
         Ok(v) => v,
         Err(e) => {
-            log::warn!("[spectra-core] failed to parse SPECTRA_CONFIG: {e}");
+            tracing::warn!(error = %e, "failed to parse SPECTRA_CONFIG");
             return;
         }
     };
@@ -221,10 +223,7 @@ fn build_resolved(config: &SpectraConfig) -> HashMap<String, EmitPolicy> {
             continue;
         };
         let override_cfg = config.per_name.get(name);
-        resolved.insert(
-            name.to_string(),
-            resolve_policy(metadata, override_cfg),
-        );
+        resolved.insert(name.to_string(), resolve_policy(metadata, override_cfg));
     }
 
     for (name, override_cfg) in &config.per_name {
@@ -264,41 +263,35 @@ pub fn install_config(config: SpectraConfig) {
         default_policy: EmitPolicy::default(),
     };
     let resolved = build_resolved(&config);
-    *slot().write().expect("spectra gate config lock") = Some(InstalledConfig { gate, resolved });
-    log::info!(
-        "[spectra-core] emit gate installed: enabled={} min_level={:?} global_sample_rate={}",
-        config.enabled,
-        config.min_level,
-        config.global_sample_rate,
+    *slot().write() = Some(InstalledConfig { gate, resolved });
+    tracing::info!(
+        enabled = config.enabled,
+        min_level = ?config.min_level,
+        global_sample_rate = config.global_sample_rate,
+        "emit gate installed"
     );
 }
 
 pub(crate) fn gate_state() -> Option<GateState> {
-    slot()
-        .read()
-        .ok()?
-        .as_ref()
-        .map(|c| c.gate.clone())
+    slot().read().as_ref().map(|c| c.gate.clone())
 }
 
 pub(crate) fn policy_for(name: &str) -> EmitPolicy {
     slot()
         .read()
-        .ok()
-        .and_then(|guard| {
-            guard.as_ref().map(|c| {
-                c.resolved
-                    .get(name)
-                    .copied()
-                    .unwrap_or(c.gate.default_policy)
-            })
+        .as_ref()
+        .map(|c| {
+            c.resolved
+                .get(name)
+                .copied()
+                .unwrap_or(c.gate.default_policy)
         })
         .unwrap_or_default()
 }
 
 #[cfg(test)]
 pub fn reset_config_for_test() {
-    *slot().write().expect("spectra gate config lock") = None;
+    *slot().write() = None;
 }
 
 #[cfg(test)]
@@ -326,7 +319,8 @@ sample_rate = 0.01
         merge_toml(&mut config, toml);
         assert_eq!(config.min_level, SpectraLevel::Debug);
         assert!((config.global_sample_rate - 0.5).abs() < f64::EPSILON);
-        assert!((config.per_name["example_db_reads"].sample_rate.unwrap() - 0.01).abs()
-            < f64::EPSILON);
+        assert!(
+            (config.per_name["example_db_reads"].sample_rate.unwrap() - 0.01).abs() < f64::EPSILON
+        );
     }
 }

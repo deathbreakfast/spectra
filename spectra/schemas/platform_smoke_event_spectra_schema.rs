@@ -1,4 +1,4 @@
-use spectra::{spectra_schema};
+use spectra::spectra_schema;
 
 spectra_schema! {
     PlatformSmokeEvent {

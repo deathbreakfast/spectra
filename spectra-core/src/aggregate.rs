@@ -104,10 +104,8 @@ mod tests {
     #[test]
     fn lossless_sum_collapses_same_key() {
         let t = ts();
-        let (out, coalesced) = accumulate_counters(vec![
-            counter("c", &[], 3, t),
-            counter("c", &[], 5, t),
-        ]);
+        let (out, coalesced) =
+            accumulate_counters(vec![counter("c", &[], 3, t), counter("c", &[], 5, t)]);
         assert_eq!(coalesced, 1);
         assert_eq!(out.len(), 1);
         match &out[0] {
@@ -188,10 +186,8 @@ mod tests {
     #[test]
     fn negative_deltas_sum_arithmetically() {
         let t = ts();
-        let (out, coalesced) = accumulate_counters(vec![
-            counter("c", &[], 5, t),
-            counter("c", &[], -2, t),
-        ]);
+        let (out, coalesced) =
+            accumulate_counters(vec![counter("c", &[], 5, t), counter("c", &[], -2, t)]);
         assert_eq!(coalesced, 1);
         match &out[0] {
             BufferedEmit::Counter { delta, .. } => assert_eq!(*delta, 3),

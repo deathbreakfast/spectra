@@ -28,6 +28,8 @@ mod mem_store;
 mod metrics;
 mod query_sql;
 
-pub use client::{datetime_to_ch_ts, parse_rfc3339_ts, EventInsertRow, MetricInsertRow, RemoteClient};
+pub use client::{
+    datetime_to_ch_ts, parse_rfc3339_ts, EventInsertRow, MetricInsertRow, RemoteClient,
+};
 pub use events::RemoteEventsBackend;
 pub use metrics::RemoteMetricsBackend;

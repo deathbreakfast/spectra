@@ -16,9 +16,7 @@ use std::sync::Arc;
 
 use chrono::{TimeZone, Utc};
 use spectra::topics::PlatformSmokeCounterPayload;
-use spectra::{
-    try_record_counter_at, MemEventsBackend, MemMetricsBackend, MetricEmit, Spectra,
-};
+use spectra::{try_record_counter_at, MemEventsBackend, MemMetricsBackend, MetricEmit, Spectra};
 use spectra_core::{SharedEventBackend, SharedMetricsBackend};
 
 #[tokio::main]
@@ -69,7 +67,7 @@ async fn main() -> spectra::Result<()> {
         })
         .await?;
 
-    println!(
+    eprintln!(
         "consume-forward OK: topic={}, {} metric point(s) in storage (ts preserved)",
         PlatformSmokeCounterPayload::topic(),
         points.len()

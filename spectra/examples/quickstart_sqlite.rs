@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use spectra::{SqliteEventsBackend, SqliteMetricsBackend, Spectra};
+use spectra::{Spectra, SqliteEventsBackend, SqliteMetricsBackend};
 
 #[tokio::main]
 async fn main() -> spectra::Result<()> {
@@ -22,6 +22,6 @@ async fn main() -> spectra::Result<()> {
         .embedded()
         .build()?;
 
-    println!("SQLite backends ready under {}", dir.display());
+    eprintln!("SQLite backends ready under {}", dir.display());
     Ok(())
 }

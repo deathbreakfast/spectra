@@ -96,8 +96,12 @@ impl BootstrapSession {
             }
         };
 
-        let (builder, telemetry_state) =
-            telemetry::apply_telemetry(builder, self.matrix.telemetry, self.matrix.transport, &slug)?;
+        let (builder, telemetry_state) = telemetry::apply_telemetry(
+            builder,
+            self.matrix.telemetry,
+            self.matrix.transport,
+            &slug,
+        )?;
 
         let spectra = builder
             .build()

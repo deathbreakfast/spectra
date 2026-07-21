@@ -1,6 +1,8 @@
 //! In-memory [`SpectraSink`] for tests.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 
 use serde_json::Value;
 
@@ -77,7 +79,7 @@ impl RecordingSink {
 
     /// Clears all recorded emits.
     pub fn clear(&self) {
-        let mut g = self.inner.lock().expect("recording sink lock");
+        let mut g = self.inner.lock();
         g.counters.clear();
         g.gauges.clear();
         g.events.clear();
@@ -85,29 +87,17 @@ impl RecordingSink {
 
     /// Returns all recorded counter increments.
     pub fn counters(&self) -> Vec<RecordedCounter> {
-        self.inner
-            .lock()
-            .expect("recording sink lock")
-            .counters
-            .clone()
+        self.inner.lock().counters.clone()
     }
 
     /// Returns all recorded gauge samples.
     pub fn gauges(&self) -> Vec<RecordedGauge> {
-        self.inner
-            .lock()
-            .expect("recording sink lock")
-            .gauges
-            .clone()
+        self.inner.lock().gauges.clone()
     }
 
     /// Returns all recorded events.
     pub fn events(&self) -> Vec<RecordedEvent> {
-        self.inner
-            .lock()
-            .expect("recording sink lock")
-            .events
-            .clone()
+        self.inner.lock().events.clone()
     }
 
     /// Returns counters matching a name and label subset.
@@ -145,15 +135,11 @@ impl SpectraSink for RecordingSink {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
-        self.inner
-            .lock()
-            .expect("recording sink lock")
-            .counters
-            .push(RecordedCounter {
-                name: name.to_string(),
-                labels,
-                delta,
-            });
+        self.inner.lock().counters.push(RecordedCounter {
+            name: name.to_string(),
+            labels,
+            delta,
+        });
     }
 
     fn record_gauge(&self, name: &str, labels: &[(&str, &str)], value: f64) {
@@ -161,26 +147,18 @@ impl SpectraSink for RecordingSink {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
-        self.inner
-            .lock()
-            .expect("recording sink lock")
-            .gauges
-            .push(RecordedGauge {
-                name: name.to_string(),
-                labels,
-                value,
-            });
+        self.inner.lock().gauges.push(RecordedGauge {
+            name: name.to_string(),
+            labels,
+            value,
+        });
     }
 
     fn log_event(&self, table: &str, fields: &Value) {
-        self.inner
-            .lock()
-            .expect("recording sink lock")
-            .events
-            .push(RecordedEvent {
-                table: table.to_string(),
-                fields: fields.clone(),
-            });
+        self.inner.lock().events.push(RecordedEvent {
+            table: table.to_string(),
+            fields: fields.clone(),
+        });
     }
 }
 

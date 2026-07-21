@@ -1,20 +1,18 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use spectra::{
-    MemEventsBackend, MemMetricsBackend, SqliteEventsBackend, SqliteMetricsBackend,
-};
 use spectra::spectra_core::{EventStorageBackend, MetricsStorageBackend};
+use spectra::{MemEventsBackend, MemMetricsBackend, SqliteEventsBackend, SqliteMetricsBackend};
 
 use crate::fixtures::TempStore;
 use crate::matrix::StorageAdapter;
 
-#[cfg(all(feature = "clickhouse", feature = "tensorbase"))]
-use crate::shard::{clickhouse_url_sharded, tensorbase_url_sharded};
 #[cfg(all(feature = "clickhouse", not(feature = "tensorbase")))]
 use crate::shard::clickhouse_url_sharded;
 #[cfg(all(feature = "tensorbase", not(feature = "clickhouse")))]
 use crate::shard::tensorbase_url_sharded;
+#[cfg(all(feature = "clickhouse", feature = "tensorbase"))]
+use crate::shard::{clickhouse_url_sharded, tensorbase_url_sharded};
 
 /// Metrics and events backends kept alive for the duration of a matrix run.
 pub struct BackendPair {

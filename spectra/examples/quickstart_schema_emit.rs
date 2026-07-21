@@ -39,9 +39,6 @@ async fn main() -> spectra::Result<()> {
         })
         .await?;
 
-    println!(
-        "schema emit OK: {} metric point(s) persisted",
-        points.len()
-    );
+    eprintln!("schema emit OK: {} metric point(s) persisted", points.len());
     Ok(())
 }

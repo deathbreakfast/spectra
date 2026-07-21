@@ -17,7 +17,7 @@ tokio = { version = "1", features = ["rt"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-# spectra-testkit is workspace-only (unpublished); restore for local storage_contract tests.
+spectra-testkit = { workspace = true }
 
 [lints]
 workspace = true

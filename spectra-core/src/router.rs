@@ -1,7 +1,9 @@
 //! Resolves event tables and metric names to storage backends for reads and writes.
 
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::{Arc, OnceLock};
+
+use parking_lot::RwLock;
 
 use crate::error::Result;
 use crate::query::EventAggregateResult;
@@ -78,24 +80,20 @@ impl SpectraRouter {
 
     /// Registers a storage backend for an event table.
     pub fn register_event_backend(&self, table: impl Into<String>, backend: SharedEventBackend) {
-        if let Ok(mut guard) = self.events.write() {
-            guard.insert(table.into(), backend);
-        }
+        self.events.write().insert(table.into(), backend);
     }
 
     /// Registers a storage backend for a metric family.
     pub fn register_metrics_backend(&self, name: impl Into<String>, backend: SharedMetricsBackend) {
-        if let Ok(mut guard) = self.metrics.write() {
-            guard.insert(name.into(), backend);
-        }
+        self.metrics.write().insert(name.into(), backend);
     }
 
     /// Resolves the backend for an event table, falling back to the default.
     pub fn resolve_event(&self, table: &str) -> SharedEventBackend {
         self.events
             .read()
-            .ok()
-            .and_then(|g| g.get(table).cloned())
+            .get(table)
+            .cloned()
             .unwrap_or_else(|| Arc::clone(&self.default_events))
     }
 
@@ -103,8 +101,8 @@ impl SpectraRouter {
     pub fn resolve_metrics(&self, name: &str) -> SharedMetricsBackend {
         self.metrics
             .read()
-            .ok()
-            .and_then(|g| g.get(name).cloned())
+            .get(name)
+            .cloned()
             .unwrap_or_else(|| Arc::clone(&self.default_metrics))
     }
 
@@ -142,7 +140,12 @@ impl SpectraRouter {
     }
 
     /// Returns the process-global router (panics if not installed).
-    pub fn global() -> Arc<SpectraRouter> {
+    ///
+    /// Prefer [`Self::try_global`] in library code; use this in hosts/examples that have
+    /// already called [`Self::set_global`].
+    pub fn global() -> Arc<Self> {
+        // Process invariant: hosts must install before calling.
+        #[allow(clippy::expect_used)]
         GLOBAL_ROUTER
             .get()
             .cloned()
@@ -150,7 +153,7 @@ impl SpectraRouter {
     }
 
     /// Returns the process-global router if installed.
-    pub fn try_global() -> Option<Arc<SpectraRouter>> {
+    pub fn try_global() -> Option<Arc<Self>> {
         GLOBAL_ROUTER.get().cloned()
     }
 }

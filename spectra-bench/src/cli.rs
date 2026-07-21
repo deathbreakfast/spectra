@@ -78,7 +78,10 @@ pub enum Command {
         report: Option<std::path::PathBuf>,
         #[arg(long, help = "Prefill depth for query experiments")]
         prefill: Option<u64>,
-        #[arg(long, help = "Comma-separated prefill depths (default 1000,10000,100000,1000000)")]
+        #[arg(
+            long,
+            help = "Comma-separated prefill depths (default 1000,10000,100000,1000000)"
+        )]
         prefill_sweep: Option<String>,
         #[arg(long, help = "Timed query iterations (default 1000)")]
         query_iters: Option<u64>,

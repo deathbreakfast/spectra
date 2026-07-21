@@ -8,7 +8,8 @@ pub use durable::{
     BATCHED_DURABLE_COUNTER_NAME, DURABLE_COUNTER_NAME, DURABLE_EVENT_TABLE,
 };
 pub use firehose::{
-    run_adapter_counter_firehose, run_event_firehose, run_full_stack_counter_firehose, FirehoseResult,
+    run_adapter_counter_firehose, run_event_firehose, run_full_stack_counter_firehose,
+    FirehoseResult,
 };
 pub use prefill::{prefill_events, prefill_metrics};
 pub use query_bench::{

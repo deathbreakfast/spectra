@@ -1,6 +1,6 @@
 //! In-memory store for unit tests (no ClickHouse server required).
 
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -41,15 +41,12 @@ impl MemStore {
         delta: i64,
         ts: DateTime<Utc>,
     ) -> Result<()> {
-        self.metrics
-            .write()
-            .expect("mem store lock")
-            .push(StoredMetric {
-                name: name.to_string(),
-                value: delta as f64,
-                labels: labels.clone(),
-                ts,
-            });
+        self.metrics.write().push(StoredMetric {
+            name: name.to_string(),
+            value: delta as f64,
+            labels: labels.clone(),
+            ts,
+        });
         Ok(())
     }
 
@@ -60,20 +57,17 @@ impl MemStore {
         value: f64,
         ts: DateTime<Utc>,
     ) -> Result<()> {
-        self.metrics
-            .write()
-            .expect("mem store lock")
-            .push(StoredMetric {
-                name: name.to_string(),
-                value,
-                labels: labels.clone(),
-                ts,
-            });
+        self.metrics.write().push(StoredMetric {
+            name: name.to_string(),
+            value,
+            labels: labels.clone(),
+            ts,
+        });
         Ok(())
     }
 
     pub fn query_range(&self, query: MetricsQueryRange) -> Result<Vec<MetricPoint>> {
-        let guard = self.metrics.read().expect("mem store lock");
+        let guard = self.metrics.read();
         Ok(guard
             .iter()
             .filter(|p| p.name == query.metric_name)
@@ -87,25 +81,17 @@ impl MemStore {
             .collect())
     }
 
-    pub fn append_row(
-        &self,
-        table: &str,
-        fields: &Value,
-        ts: DateTime<Utc>,
-    ) -> Result<()> {
-        self.events
-            .write()
-            .expect("mem store lock")
-            .push(StoredEvent {
-                table: table.to_string(),
-                fields: fields.clone(),
-                ts,
-            });
+    pub fn append_row(&self, table: &str, fields: &Value, ts: DateTime<Utc>) -> Result<()> {
+        self.events.write().push(StoredEvent {
+            table: table.to_string(),
+            fields: fields.clone(),
+            ts,
+        });
         Ok(())
     }
 
     pub fn query_rows(&self, filter: EventsQueryFilter) -> Result<Vec<EventRow>> {
-        let guard = self.events.read().expect("mem store lock");
+        let guard = self.events.read();
         let out: Vec<EventRow> = guard
             .iter()
             .filter(|r| r.table == filter.table)

@@ -117,12 +117,7 @@ pub struct MetricEmit {
 
 impl MetricEmit {
     /// Builds a counter emit envelope.
-    pub fn counter(
-        name: impl Into<String>,
-        labels: Value,
-        delta: i64,
-        ts: DateTime<Utc>,
-    ) -> Self {
+    pub fn counter(name: impl Into<String>, labels: Value, delta: i64, ts: DateTime<Utc>) -> Self {
         Self {
             name: name.into(),
             kind: MetricKind::Counter,

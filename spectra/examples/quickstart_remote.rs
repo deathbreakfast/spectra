@@ -9,8 +9,7 @@ use spectra_core::SharedMetricsBackend;
 async fn run_clickhouse(url: &str) -> spectra_core::Result<()> {
     use spectra::{ClickHouseEventsBackend, ClickHouseMetricsBackend, Spectra};
 
-    let metrics: SharedMetricsBackend =
-        Arc::new(ClickHouseMetricsBackend::connect(url).await?);
+    let metrics: SharedMetricsBackend = Arc::new(ClickHouseMetricsBackend::connect(url).await?);
     let events: SharedEventBackend = Arc::new(ClickHouseEventsBackend::connect(url).await?);
 
     let _spectra = Spectra::builder()
@@ -24,8 +23,7 @@ async fn run_clickhouse(url: &str) -> spectra_core::Result<()> {
 async fn run_tensorbase(url: &str) -> spectra_core::Result<()> {
     use spectra::{Spectra, TensorBaseEventsBackend, TensorBaseMetricsBackend};
 
-    let metrics: SharedMetricsBackend =
-        Arc::new(TensorBaseMetricsBackend::connect(url).await?);
+    let metrics: SharedMetricsBackend = Arc::new(TensorBaseMetricsBackend::connect(url).await?);
     let events: SharedEventBackend = Arc::new(TensorBaseEventsBackend::connect(url).await?);
 
     let _spectra = Spectra::builder()

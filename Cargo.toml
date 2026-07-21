@@ -35,44 +35,47 @@ spectra = { path = "spectra", package = "uf-spectra", version = "0.1.0", default
 # Unpublished; version present so library crates with testkit [dev-dependencies] can publish.
 spectra-testkit = { path = "spectra-testkit", version = "0.1.0" }
 quark = { package = "uf-quark", version = "0.1.1" }
+parking_lot = "0.12"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
+# Low-signal / high-churn pedantic noise (intentional)
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
+return_self_not_must_use = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 doc_markdown = "allow"
+too_long_first_doc_paragraph = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+missing_const_for_fn = "allow"
+duration_suboptimal_units = "allow"
+redundant_pub_crate = "allow"
+option_if_let_else = "allow"
 significant_drop_tightening = "allow"
 unused_async = "allow"
 unnecessary_wraps = "allow"
 use_self = "allow"
-cast_possible_truncation = "allow"
-cast_possible_wrap = "allow"
-cast_sign_loss = "allow"
-ignored_unit_patterns = "allow"
-needless_pass_by_value = "allow"
-missing_const_for_fn = "allow"
-duration_suboptimal_units = "allow"
-return_self_not_must_use = "allow"
-redundant_pub_crate = "allow"
 uninlined_format_args = "allow"
-option_if_let_else = "allow"
 redundant_closure_for_method_calls = "allow"
 redundant_closure = "allow"
-cast_precision_loss = "allow"
-too_long_first_doc_paragraph = "allow"
 map_unwrap_or = "allow"
+manual_let_else = "allow"
+ignored_unit_patterns = "allow"
+needless_pass_by_value = "allow"
 semicolon_if_nothing_returned = "allow"
 match_like_matches_macro = "allow"
 unreadable_literal = "allow"
 unnested_or_patterns = "allow"
 match_same_arms = "allow"
 match_wildcard_for_single_variants = "allow"
-await_holding_lock = "allow"
-future_not_send = "allow"
 no_effect_underscore_binding = "allow"
 float_cmp = "allow"
 default_trait_access = "allow"
@@ -80,7 +83,13 @@ single_match = "allow"
 single_match_else = "allow"
 let_and_return = "allow"
 ptr_as_ptr = "allow"
-manual_let_else = "allow"
+# Correctness-adjacent: enforced (do not re-allow without fixing code)
+# await_holding_lock, future_not_send — default warn via groups above
+# Restriction lints (tests exempt via clippy.toml)
+unwrap_used = "warn"
+expect_used = "warn"
+dbg_macro = "warn"
+print_stdout = "warn"
 redundant_clone = "warn"
 
 [workspace.lints.rustdoc]

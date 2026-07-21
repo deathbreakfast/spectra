@@ -2,6 +2,8 @@
 //!
 //! **Internal** — library surface exists for shared test harness wiring; downstream users run
 //! `cargo test -p spectra-e2e`, not this crate as a dependency.
+
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 //!
 //! Test-only layer above `spectra_testkit` and `spectra`. Scenarios and matrix presets live in
 //! testkit; this crate hosts integration test binaries and matrix drivers.
