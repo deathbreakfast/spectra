@@ -111,6 +111,14 @@ let spectra = Spectra::builder()
 
 See [`spectra/examples/quickstart_transport.rs`](spectra/examples/quickstart_transport.rs) for a runnable dual-path demo.
 
+## Logging surfaces
+
+| Surface | What it is | Topic / path |
+|---------|------------|--------------|
+| Metrics | High-volume counters, gauges, histograms | `spectra.metric.{name}` |
+| Events | Typed structured event rows | `spectra.event.{table}` |
+| Batched partition exports | Batch jobs that write partition snapshots into event storage | **Your application** — outside this library; use the event sink / adapters |
+
 ## Cargo features
 
 | Feature | Backend | Notes |
@@ -126,7 +134,7 @@ See [`spectra/examples/quickstart_transport.rs`](spectra/examples/quickstart_tra
 | Capability | Status |
 |------------|--------|
 | Event chart aggregates (`query_aggregate`) | **Stub** — returns empty series on sqlite and remote backends; `Count` only on mem |
-| Partition exports | **Your application** — batch export jobs live outside this library |
+| Batched partition exports | **Your application** — batch export jobs live outside this library |
 | CI demo schemas (`platform_smoke_*`) | Illustrate macros + inventory; define product schemas in your repo |
 
 ## Workspace crates
