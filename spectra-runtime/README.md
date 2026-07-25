@@ -19,17 +19,17 @@ Runtime assembly: builder, composite sink, and process install.
 
 ## Builder composition
 
-| Mode | Calls | Role |
-|------|-------|------|
+| Wiring | Calls | Role |
+|--------|-------|------|
 | Direct persist (default) | `.metrics_backend(..).events_backend(..).build()` | Emit process writes storage |
 | High-throughput batch | `.persist(PersistConfig { batch_max: 2048, ..Default::default() })` | Larger L2 batches to DW |
-| Transport + persist | `.sink(transport).build()` | Dual-path mirror + persist |
+| Dual-path | `.sink(transport).build()` | Bus mirror + persist |
 | Publish only | `.sink(transport).persist_disabled().build()` | Publisher; consumers own storage |
 
 Canonical emit path for web and scripts: `try_record_*_now` / generated helpers → L2 batch worker.
 Use `flush_persist().await` when a script must wait for durable writes before exit.
 
-See the `spectra` crate rustdoc **Getting started → Mode 2** for the publisher/consumer split.
+See the `spectra` crate rustdoc **Getting started → Publish-consume** for the publisher/consumer split.
 
 ## Status
 

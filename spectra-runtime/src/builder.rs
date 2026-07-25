@@ -101,14 +101,14 @@ impl Spectra {
 /// Both metrics and events backends are required. Storage persistence is enabled by default;
 /// an optional [`SpectraSink`] can receive the same emits before they are queued for persistence.
 ///
-/// | Mode | Calls |
-/// |------|-------|
+/// | Wiring | Calls |
+/// |--------|-------|
 /// | Direct persist | backends + `.build()` |
 /// | Dual-path | `.sink(transport).build()` |
-/// | **Publisher** (distributed) | `.sink(transport).persist_disabled().build()` |
+/// | **Publisher** (publish-consume) | `.sink(transport).persist_disabled().build()` |
 ///
 /// Publisher processes publish through the sink; consumers subscribe on the host bus and write
-/// storage. See the `spectra` crate **Getting started → Mode 2**.
+/// storage. See the `spectra` crate **Getting started → Publish-consume**.
 ///
 /// # Examples
 ///
@@ -198,7 +198,7 @@ impl SpectraBuilder {
     ///
     /// Implement [`SpectraSink`](spectra_core::SpectraSink) in your application or use
     /// [`RecordingSink`](spectra_core::RecordingSink) in tests. See the `spectra` crate
-    /// **Getting started → Mode 2**.
+    /// **Getting started → Publish-consume**.
     pub fn sink(mut self, sink: Arc<dyn SpectraSink>) -> Self {
         self.transport_sink = Some(sink);
         self

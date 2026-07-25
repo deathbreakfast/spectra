@@ -42,6 +42,15 @@ let _spectra = Spectra::builder()
 
 **Note:** [TensorBase upstream](https://github.com/tensorbase/tensorbase) is maintenance-only; the trait boundary allows swapping engines without changing emit code.
 
+## Runnable
+
+```bash
+export SPECTRA_TENSORBASE_URL=tcp://127.0.0.1:9528
+cargo run -p uf-spectra --example quickstart_tensorbase_emit --features tensorbase
+```
+
+See [`spectra/README.md` — How to run examples](../spectra/README.md#how-to-run-examples).
+
 Integration tests: set `SPECTRA_TENSORBASE_URL` and run `cargo test -p spectra-backend-tensorbase -- --ignored`.
 
 ## Status

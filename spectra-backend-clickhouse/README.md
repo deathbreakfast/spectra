@@ -30,6 +30,16 @@ let _spectra = Spectra::builder()
     .build()?;
 ```
 
+## Runnable
+
+```bash
+docker compose -f docker-compose.dev.yml up -d clickhouse
+export SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123
+cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse
+```
+
+See [`spectra/README.md` — How to run examples](../spectra/README.md#how-to-run-examples).
+
 Integration tests: set `SPECTRA_CLICKHOUSE_URL` and run `cargo test -p spectra-backend-clickhouse -- --ignored`.
 
 ## Status

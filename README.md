@@ -111,7 +111,28 @@ let spectra = Spectra::builder()
 // Emits fan out to transport synchronously, then async storage persist (default).
 ```
 
-See [`spectra/examples/quickstart_transport.rs`](spectra/examples/quickstart_transport.rs) for a runnable dual-path demo.
+### Examples (canonical path)
+
+Full runbooks: [`spectra/README.md` — How to run examples](spectra/README.md#how-to-run-examples).
+
+```bash
+# 1. Embedded + schema emit (mem)
+cargo run -p uf-spectra --example quickstart_schema_emit --features mem
+
+# 2. Publish-consume sketches (standalone — no bus required)
+cargo run -p uf-spectra --example quickstart_publish_only --features mem
+cargo run -p uf-spectra --example quickstart_consume_forward --features mem
+
+# 3. Remote ClickHouse (Docker Compose)
+docker compose -f docker-compose.dev.yml up -d clickhouse
+export SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123
+cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse
+```
+
+API details: [`spectra/README.md`](spectra/README.md) and `cargo doc -p uf-spectra --all-features --open`
+([Direct persist](https://docs.rs/uf-spectra/latest/spectra/index.html#direct-persist-one-binary) /
+[Publish-consume](https://docs.rs/uf-spectra/latest/spectra/index.html#publish-consume-two-binaries) /
+[Dual-path](https://docs.rs/uf-spectra/latest/spectra/index.html#dual-path-optional)).
 
 ## Logging surfaces
 
@@ -154,9 +175,9 @@ See [`spectra/examples/quickstart_transport.rs`](spectra/examples/quickstart_tra
 
 | Doc | Audience |
 |-----|----------|
-| `cargo doc -p uf-spectra --all-features --open` | API reference, Getting started modes (direct vs publisher/consumer), examples |
-| [`spectra/README.md`](spectra/README.md) | Feature flags, configuration, backend wiring |
-| [`spectra/examples/`](spectra/examples/) | Runnable flows including publish-only and consume-forward |
+| `cargo doc -p uf-spectra --all-features --open` | API reference, Getting started (direct / publish-consume / dual-path), examples |
+| [`spectra/README.md`](spectra/README.md) | Feature flags, configuration, [How to run examples](spectra/README.md#how-to-run-examples) |
+| [`spectra/examples/`](spectra/examples/) | Runnable flows (canonical path + other) |
 | [`docs/bench/EXPERIMENTS.md`](docs/bench/EXPERIMENTS.md) | Benchmark registry and CLI |
 | [`docs/bench/PERFORMANCE_STUDY.md`](docs/bench/PERFORMANCE_STUDY.md) | Performance study |
 | Per-crate READMEs | Crate-specific entry points |
@@ -171,12 +192,6 @@ See [`spectra/examples/quickstart_transport.rs`](spectra/examples/quickstart_tra
 ./scripts/verify-release.sh
 ```
 
-### Local ClickHouse smoke (Docker)
-
-```bash
-docker compose -f docker-compose.dev.yml up -d clickhouse
-export SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123
-cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse
-```
+Local ClickHouse smoke is step 3 of [Examples (canonical path)](#examples-canonical-path).
 
 A workspace [`Dockerfile`](Dockerfile) and [`.devcontainer/`](.devcontainer/) are available for containerized development.

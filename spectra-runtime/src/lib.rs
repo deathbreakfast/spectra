@@ -7,7 +7,7 @@
 //! - [`SpectraBuilder::persist`] — L2 queue/batch settings ([`PersistConfig`]; no env knobs)
 //! - [`Spectra::flush_persist`] — durable barrier after `*_now` emits (Write Now scripts)
 //! - [`SpectraBuilder::sink`] + [`SpectraBuilder::persist_disabled`] — **publisher** wiring for
-//!   distributed ingest (consumers own storage; see `spectra` **Getting started → Mode 2**)
+//!   publish-consume ingest (consumers own storage; see `spectra` **Getting started → Publish-consume**)
 //! - [`StoragePersistSink`] — default async persist to registered storage backends
 //! - [`OffThreadSpectraSink`] — off-thread NDJSON + console mirror (`telemetry-console` feature)
 //! - Both `metrics_backend` and `events_backend` are required before [`SpectraBuilder::build`].

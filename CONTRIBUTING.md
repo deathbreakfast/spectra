@@ -45,10 +45,6 @@ cargo run -p uf-spectra --example quickstart_telemetry --features mem,telemetry-
 Remote examples require live storage URLs:
 
 ```bash
-# Connect-only (legacy)
-SPECTRA_REMOTE_URL=http://localhost:8123 cargo run -p uf-spectra --example quickstart_remote --features clickhouse
-
-# Emit + query roundtrip (preferred)
 SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123 cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse
 SPECTRA_TENSORBASE_URL=tcp://127.0.0.1:9528 cargo run -p uf-spectra --example quickstart_tensorbase_emit --features tensorbase
 ```

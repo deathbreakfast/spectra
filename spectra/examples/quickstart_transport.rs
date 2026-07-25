@@ -1,8 +1,8 @@
 //! Transport + storage **dual-path**: sink receives emits *and* storage persists.
 //!
-//! Matches **Getting started → Mode 3** in the `spectra` crate docs. Contrast with
-//! `quickstart_publish_only` (Mode 2 publisher) and `quickstart_consume_forward` (Mode 2
-//! consumer).
+//! Matches **Getting started → Dual-path** in the `spectra` crate docs. Contrast with
+//! `quickstart_publish_only` (publish-consume publisher) and `quickstart_consume_forward`
+//! (publish-consume consumer).
 //!
 //! ```bash
 //! cargo run -p uf-spectra --example quickstart_transport --features mem

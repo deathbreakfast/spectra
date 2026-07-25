@@ -50,10 +50,6 @@ name = "quickstart"
 required-features = ["mem"]
 
 [[example]]
-name = "quickstart_remote"
-required-features = ["clickhouse"]
-
-[[example]]
 name = "quickstart_clickhouse_emit"
 required-features = ["clickhouse"]
 

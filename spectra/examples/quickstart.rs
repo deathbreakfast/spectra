@@ -19,5 +19,6 @@ async fn main() -> spectra::Result<()> {
         .events_backend(std::sync::Arc::new(MemEventsBackend::new()))
         .embedded()
         .build()?;
+    eprintln!("Spectra booted with in-memory backends (embedded)");
     Ok(())
 }

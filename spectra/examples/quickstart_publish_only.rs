@@ -1,9 +1,9 @@
 //! Publisher-only wiring: transport sink receives emits; storage persist is disabled.
 //!
-//! Matches **Getting started → Mode 2 → Publisher binary** in the `spectra` crate docs.
+//! Matches **Getting started → Publish-consume → Publisher binary** in the `spectra` crate docs.
 //! Replace [`RecordingSink`] with a host `SpectraSink` that publishes schema `*Payload`
 //! / `*_TOPIC` values onto your bus (for example Photon). Pair with a separate consumer binary
-//! (`quickstart_consume_forward` sketches the other half).
+//! (`quickstart_consume_forward` sketches the other half). See crate README **How to run examples**.
 //!
 //! ```bash
 //! cargo run -p uf-spectra --example quickstart_publish_only --features mem

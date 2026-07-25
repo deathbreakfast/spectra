@@ -1,10 +1,10 @@
 //! Consumer-side sketch: decode a [`MetricEmit`] and persist via [`try_record_counter_at`].
 //!
-//! Matches **Getting started → Mode 2 → Consumer binary** in the `spectra` crate docs.
+//! Matches **Getting started → Publish-consume → Consumer binary** in the `spectra` crate docs.
 //! In production, receive the envelope from your bus (for example a Photon subscriber), then
 //! call `try_record_counter_at` / `try_log_event_at` with the envelope timestamp (or a storage
 //! backend). This example builds the envelope in-process so the roundtrip is runnable without
-//! a broker.
+//! a broker. See crate README **How to run examples**.
 //!
 //! See also [`spectra::topics`].
 //!

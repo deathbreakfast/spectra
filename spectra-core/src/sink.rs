@@ -4,7 +4,7 @@
 //! composite adapter) in addition to or instead of async storage persist. Wire the sink with
 //! `Spectra::builder().sink(...)` (see `spectra` / `spectra-runtime`).
 //!
-//! # Publisher role (distributed mode)
+//! # Publisher role (publish-consume)
 //!
 //! In a publisher process, the sink is the bridge out of Spectra:
 //!
@@ -17,7 +17,7 @@
 //!
 //! Consumer processes subscribe on the bus and write storage via `try_record_counter_now` /
 //! `try_log_event_now` (or a storage backend). The `spectra` crate documents the full
-//! publisher/consumer split under **Getting started → Mode 2**. Spectra does not embed a bus;
+//! publisher/consumer split under **Getting started → Publish-consume**. Spectra does not embed a bus;
 //! [Photon](https://github.com/unified-field-dev/photon) (`uf-photon`) is a common host choice
 //! for durable pub/sub.
 //!

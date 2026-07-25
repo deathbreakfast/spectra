@@ -31,13 +31,13 @@ Enable backends at compile time on your `spectra` dependency. See the root [READ
 
 ### Builder composition
 
-| Mode | Calls | Role |
-|------|-------|------|
+| Wiring | Calls | Role |
+|--------|-------|------|
 | Direct persist (default) | `.metrics_backend(..).events_backend(..).build()` | Emit process writes storage |
-| Transport + persist | `.sink(transport).build()` | Dual-path: bus mirror + local persist |
-| Publish only (distributed) | `.sink(transport).persist_disabled().build()` | **Publisher** — consumers write storage |
+| Dual-path | `.sink(transport).build()` | Bus mirror + local persist |
+| Publish only (publish-consume) | `.sink(transport).persist_disabled().build()` | **Publisher** — consumers write storage |
 
-Publisher/consumer setup: `cargo doc -p uf-spectra --open` → **Getting started → Mode 2**, then
+Publisher/consumer setup: `cargo doc -p uf-spectra --open` → **Getting started → Publish-consume**, then
 `SpectraSink`, `topics`, and examples `quickstart_publish_only` /
 `quickstart_consume_forward`.
 
@@ -161,20 +161,82 @@ Your application owns telemetry DSL modules and links them with an explicit `mod
 This repository demonstrates the contract with CI demo schemas under `schemas/` and re-exports
 smoke `helpers` and `topics` from those expansions.
 
-## Examples
+## How to run examples
+
+Canonical teaching path (start here). Topology docs:
+[Direct persist](https://docs.rs/uf-spectra/latest/spectra/index.html#direct-persist-one-binary) /
+[Publish-consume](https://docs.rs/uf-spectra/latest/spectra/index.html#publish-consume-two-binaries) /
+[Dual-path](https://docs.rs/uf-spectra/latest/spectra/index.html#dual-path-optional).
 
 ```bash
 export CARGO_BUILD_JOBS=1 CARGO_TARGET_DIR=target-spectra-extract
-cargo run -p uf-spectra --example quickstart --features mem
-cargo run -p uf-spectra --example quickstart_transport --features mem
-cargo run -p uf-spectra --example quickstart_publish_only --features mem
-cargo run -p uf-spectra --example quickstart_consume_forward --features mem
-cargo run -p uf-spectra --example quickstart_sqlite --features sqlite
-cargo run -p uf-spectra --example quickstart_schema_emit --features mem
-cargo run -p uf-spectra --example quickstart_telemetry --features mem,telemetry-console
-# Remote (requires live ClickHouse):
-SPECTRA_REMOTE_URL=http://localhost:8123 cargo run -p uf-spectra --example quickstart_remote --features clickhouse
 ```
+
+### 1. Embedded + schema emit — `quickstart_schema_emit` (standalone)
+
+One process, in-memory store, typed helpers + query. No external services.
+
+```bash
+cargo run -p uf-spectra --example quickstart_schema_emit --features mem
+```
+
+Success: stderr prints `schema emit OK: … metric point(s) persisted`.
+
+### 2. Publish-consume (conceptual set — run as sketches)
+
+Publisher and consumer are **separate binaries** in production. Spectra does **not** ship a
+message bus; your host owns that piece. The examples below are **standalone sketches**
+(`RecordingSink` / in-process envelope) so each command runs alone without a broker.
+
+| Rule | Detail |
+|------|--------|
+| Shared schemas | Same `spectra_*!` modules (`mod`-linked) on publisher and consumer |
+| Start order (production) | Consumer + bus first, then one or more publishers |
+| Publishers | Each app process uses `.sink(...).persist_disabled()`; unique host instance IDs if you run a fleet |
+| Consumers | Own storage (persist on); decode `*Payload` → `try_record_*_at` / `try_log_event_at` |
+| Auth / bus | Host responsibility (Photon, NATS, Kafka, …) |
+
+**Local sketches** (no bus required):
+
+```bash
+# Terminal A — publisher sketch (transport receives emit; storage empty)
+cargo run -p uf-spectra --example quickstart_publish_only --features mem
+
+# Terminal B — consumer sketch (decode envelope → persist; timestamp preserved)
+cargo run -p uf-spectra --example quickstart_consume_forward --features mem
+```
+
+**Production-shaped remote consumer** (host bus + ClickHouse) — wire your subscriber, then:
+
+```bash
+export SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123
+# Consumer binary: backends + .build() (persist on); subscribe on your bus
+# Publisher binary: .sink(bus).persist_disabled().build(); emit with typed helpers
+```
+
+See rustdoc **Getting started → Publish-consume** for sink and consumer code sketches.
+
+### 3. Remote storage — `quickstart_clickhouse_emit` (standalone)
+
+Direct persist into ClickHouse. Requires a live ClickHouse (Docker Compose below).
+
+```bash
+docker compose -f docker-compose.dev.yml up -d clickhouse
+export SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123
+cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse
+```
+
+Success: stderr prints `clickhouse emit OK: … metric point(s), … event row(s)`.
+
+### Other examples
+
+| Example | Topology | Features | Notes |
+|---------|----------|----------|-------|
+| `quickstart` | Direct persist | `mem` | Minimal boot + `tracing_subscriber` |
+| `quickstart_sqlite` | Direct persist | `sqlite` | Durable embedded wiring |
+| `quickstart_transport` | Dual-path | `mem` | Sink + persist in one process |
+| `quickstart_telemetry` | Direct persist | `mem,telemetry-console` | NDJSON under a temp dir |
+| `quickstart_tensorbase_emit` | Direct persist (remote) | `tensorbase` | Needs `SPECTRA_TENSORBASE_URL` |
 
 ## Status
 

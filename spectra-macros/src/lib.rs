@@ -24,7 +24,7 @@
 //! | `RequestLog` | `RequestLogLogger` | event `table` (`request_log`) |
 //!
 //! Each `spectra_schema!` / `spectra_metric!` expansion also emits a `*Payload` transport DTO
-//! and `*_TOPIC` constant for Mode 2 publish adapters.
+//! and `*_TOPIC` constant for publish-consume adapters.
 //!
 //! # Schema DSL features
 //!

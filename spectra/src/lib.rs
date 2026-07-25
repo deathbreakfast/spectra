@@ -34,28 +34,28 @@
 //!   filters.
 //! - **Direct or distributed wiring** — one process can write storage, or many publishers can
 //!   fan out to a consumer process that owns the database (see
-//!   [Mode 2](#mode-2--distributed-publish-and-consume-two-binaries)).
+//!   [Publish-consume](#publish-consume-two-binaries)).
 //!
 //! *Declarative schemas and typed logging APIs — same surface from embedded to multi-service.*
 //!
 //! # Getting started
 //!
 //! You always emit the same way (`CacheHitsRecorder::record(...)`, etc.). What changes is
-//! **which process writes the database**.
+//! **which process writes the database**. Storage is **embedded** (mem/sqlite) or **remote**
+//! (ClickHouse/TensorBase) — configured on [`Spectra::builder()`], not a global mode enum.
 //!
 //! ## Choose how data reaches storage
 //!
-//! - **[Mode 1 — Direct persist](#mode-1--direct-persist-one-binary)** — one binary emits and
-//!   stores. Start here.
-//! - **[Mode 2 — Distributed](#mode-2--distributed-publish-and-consume-two-binaries)** — many
-//!   app processes *publish* onto a bus; a separate **consumer** binary writes storage.
-//! - **[Mode 3 — Dual-path](#mode-3--dual-path-optional)** — one process both publishes and
-//!   stores (mirroring). Optional.
+//! - **[Direct persist](#direct-persist-one-binary)** — one binary emits and stores. Start here.
+//! - **[Publish-consume](#publish-consume-two-binaries)** — many app processes *publish* onto a
+//!   bus; a separate **consumer** binary writes storage.
+//! - **[Dual-path](#dual-path-optional)** — one process both publishes and stores (mirroring).
+//!   Optional.
 //!
-//! After you pick a mode, continue with [schemas](#4-declare-and-link-schemas)
-//! (shared by every mode).
+//! After you pick a wiring shape, continue with [schemas](#4-declare-and-link-schemas)
+//! (shared by every shape).
 //!
-//! ## Mode 1 — Direct persist (one binary)
+//! ## Direct persist (one binary)
 //!
 //! This process emits metrics/events **and** writes them to storage. There is no second binary
 //! and no message bus.
@@ -137,10 +137,13 @@
 //! # }
 //! ```
 //!
-//! Runnable: `quickstart`, `quickstart_sqlite`, `quickstart_clickhouse_emit`.
+//! Runnable:
+//! `cargo run -p uf-spectra --example quickstart_schema_emit --features mem`,
+//! `cargo run -p uf-spectra --example quickstart_sqlite --features sqlite`,
+//! `cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse`.
 //! Then jump to [schemas](#4-declare-and-link-schemas).
 //!
-//! ## Mode 2 — Distributed publish and consume (two binaries)
+//! ## Publish-consume (two binaries)
 //!
 //! Use this when many services emit telemetry but you do **not** want each of them to open
 //! ClickHouse (or SQLite) itself. Instead:
@@ -186,7 +189,7 @@
 //!    your bus. Keep the methods non-blocking (spawn a task, enqueue, or use Photon buffering).
 //! 2. Wire Spectra with `.sink(...).persist_disabled().build()` so this process does **not**
 //!    write the analytics database. (The builder still requires dummy or unused backends.)
-//! 3. Emit with typed helpers exactly as in Mode 1.
+//! 3. Emit with typed helpers exactly as in direct persist.
 //!
 //! ```ignore
 //! use std::sync::Arc;
@@ -220,13 +223,14 @@
 //!     .persist_disabled() // publisher does not open ClickHouse
 //!     .build()?;
 //!
-//! // Same emit API as Mode 1:
+//! // Same emit API as direct persist:
 //! // CacheHitsRecorder::record(1, serde_json::json!({"region":"us"}));
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! Runnable sketch (in-memory stand-in for the bus): `quickstart_publish_only`.
+//! Runnable sketch (in-memory stand-in for the bus):
+//! `cargo run -p uf-spectra --example quickstart_publish_only --features mem`.
 //! API detail: [`SpectraSink`], [`SpectraBuilder::sink`], [`SpectraBuilder::persist_disabled`].
 //!
 //! ### Consumer binary
@@ -234,7 +238,7 @@
 //! Create a **different** binary (for example `src/bin/telemetry_consumer.rs`). This process
 //! owns the database:
 //!
-//! 1. Build Spectra with real backends and **persist left on** (Mode 1-style `.build()`).
+//! 1. Build Spectra with real backends and **persist left on** (direct-persist `.build()`).
 //! 2. Start your bus subscriber (Photon `start_executor` / `#[subscribe]`, etc.).
 //! 3. On each message: deserialize to a `*Payload` or [`MetricEmit`] / [`SpectraEvent`],
 //!    then call [`try_record_counter_at`] / [`try_log_event_at`] with the envelope `ts`
@@ -265,7 +269,7 @@
 //! ```
 //!
 //! Runnable sketch (decode → `try_record_counter_at` without a live broker):
-//! `quickstart_consume_forward`.
+//! `cargo run -p uf-spectra --example quickstart_consume_forward --features mem`.
 //!
 //! ### Run both
 //!
@@ -275,20 +279,41 @@
 //!
 //! For Photon you typically set `PHOTON_TRANSPORT_KEY` (base64 of 32 bytes) and a broker URL
 //! such as `PHOTON_NATS_URL`. See Photon’s own README for adapter wiring.
+//! See the crate README **How to run examples** for the local sketch pair and production notes.
 //!
-//! ## Mode 3 — Dual-path (optional)
+//! ## Dual-path (optional)
 //!
 //! Same process both publishes through a [`SpectraSink`] **and** persists to storage. Use when
 //! you want a bus mirror without moving writes to another binary.
 //!
 //! Wire with `.sink(transport).build()` — omit `persist_disabled` so storage still receives emits.
 //!
-//! Runnable: `quickstart_transport`.
+//! Runnable: `cargo run -p uf-spectra --example quickstart_transport --features mem`.
+//!
+//! ## Runnable examples
+//!
+//! Canonical teaching path (see crate README for full runbooks):
+//!
+//! | Example | Topology | Features | Notes |
+//! |---------|----------|----------|-------|
+//! | `quickstart_schema_emit` | Direct persist (embedded) | `mem` | Typed helpers + query |
+//! | `quickstart_publish_only` | Publish-consume (publisher) | `mem` | Standalone sketch |
+//! | `quickstart_consume_forward` | Publish-consume (consumer) | `mem` | Standalone sketch |
+//! | `quickstart_clickhouse_emit` | Direct persist (remote) | `clickhouse` | Needs `SPECTRA_CLICKHOUSE_URL` |
+//!
+//! ```bash
+//! cargo run -p uf-spectra --example quickstart_schema_emit --features mem
+//! cargo run -p uf-spectra --example quickstart_publish_only --features mem
+//! cargo run -p uf-spectra --example quickstart_consume_forward --features mem
+//! # docker compose -f docker-compose.dev.yml up -d clickhouse
+//! SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123 \
+//!   cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse
+//! ```
 //!
 //! ## 4. Declare and link schemas
 //!
 //! Typed emit helpers expand from the same macros that register schema metadata. Required for
-//! every mode. No `build.rs` or `OUT_DIR` includes.
+//! every wiring shape. No `build.rs` or `OUT_DIR` includes.
 //!
 //! ```toml
 //! [dependencies]
@@ -323,7 +348,7 @@
 //! ## 5. Declare metric and event schemas
 //!
 //! Schemas are the typed contracts Spectra stores and queries. Share them across publisher and
-//! consumer binaries in Mode 2 (depend on the same schema crate).
+//! consumer binaries in publish-consume (depend on the same schema crate).
 //!
 //! - **Metric schema** ([`spectra_metric!`]) — a named measurement family; optional `level`,
 //!   `default_sample_rate`, and `coalesce_ms` (gauges).
@@ -373,13 +398,13 @@
 //!
 //! Helper names come from the schema identifier:
 //! `CacheHits` → `CacheHitsRecorder`, `RequestLog` → `RequestLogLogger`.
-//! Each expansion also emits `*Payload` and `*_TOPIC` for Mode 2 transport.
+//! Each expansion also emits `*Payload` and `*_TOPIC` for publish-consume transport.
 //!
 //! ## 6. Emit metrics and events
 //!
-//! **Mode 1 / Mode 3:** call helpers in the same process that owns (or mirrors) storage.
+//! **Direct persist / dual-path:** call helpers in the same process that owns (or mirrors) storage.
 //!
-//! **Mode 2:** call helpers only in the **publisher**. The consumer persists with
+//! **Publish-consume:** call helpers only in the **publisher**. The consumer persists with
 //! [`try_record_counter_at`] / [`try_log_event_at`] after decode (pass envelope `ts`).
 //!
 //! ```ignore
@@ -396,10 +421,10 @@
 //!
 //! Storage persist is asynchronous. Wait briefly (or poll) before querying.
 //!
-//! **Mode 1 / Mode 3:** query on the same process that wrote storage.
+//! **Direct persist / dual-path:** query on the same process that wrote storage.
 //!
-//! **Mode 2:** query from the **consumer** (or any process connected to the same database) —
-//! not from the publisher.
+//! **Publish-consume:** query from the **consumer** (or any process connected to the same
+//! database) — not from the publisher.
 //!
 //! ```no_run
 //! # #[cfg(feature = "mem")]
