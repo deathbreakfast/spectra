@@ -86,6 +86,24 @@ pub fn catalog_entries() -> &'static [CatalogEntry] {
             spec: ScenarioSpec::telemetry_console_ndjson,
             matrix_rows: ci_telemetry_rows,
         },
+        CatalogEntry {
+            id: "gate-disabled-allows-debug",
+            path: PathKind::Happy,
+            spec: ScenarioSpec::gate_disabled_allows_debug,
+            matrix_rows: ci_embedded_rows,
+        },
+        CatalogEntry {
+            id: "query-limit-clamped",
+            path: PathKind::Sad,
+            spec: ScenarioSpec::query_limit_clamped,
+            matrix_rows: ci_embedded_rows,
+        },
+        CatalogEntry {
+            id: "query-reject-bad-filter-field",
+            path: PathKind::Sad,
+            spec: ScenarioSpec::query_reject_bad_filter_field,
+            matrix_rows: ci_embedded_rows,
+        },
     ]
 }
 
@@ -128,6 +146,24 @@ pub fn remote_catalog_entries() -> &'static [CatalogEntry] {
             id: "query-time-range-empty",
             path: PathKind::Sad,
             spec: ScenarioSpec::query_time_range_empty,
+            matrix_rows: remote_ingest_rows,
+        },
+        CatalogEntry {
+            id: "gate-disabled-allows-debug",
+            path: PathKind::Happy,
+            spec: ScenarioSpec::gate_disabled_allows_debug,
+            matrix_rows: remote_ingest_rows,
+        },
+        CatalogEntry {
+            id: "query-limit-clamped",
+            path: PathKind::Sad,
+            spec: ScenarioSpec::query_limit_clamped,
+            matrix_rows: remote_ingest_rows,
+        },
+        CatalogEntry {
+            id: "query-reject-bad-filter-field",
+            path: PathKind::Sad,
+            spec: ScenarioSpec::query_reject_bad_filter_field,
             matrix_rows: remote_ingest_rows,
         },
     ]
@@ -189,6 +225,9 @@ macro_rules! invoke_catalog_scenario_ids {
             gauge_roundtrip,
             query_time_range_empty,
             telemetry_console_ndjson,
+            gate_disabled_allows_debug,
+            query_limit_clamped,
+            query_reject_bad_filter_field,
         );
     };
 }
@@ -204,6 +243,9 @@ macro_rules! invoke_remote_catalog_scenario_ids {
             label_filter_miss,
             gauge_roundtrip,
             query_time_range_empty,
+            gate_disabled_allows_debug,
+            query_limit_clamped,
+            query_reject_bad_filter_field,
         );
     };
 }

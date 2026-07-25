@@ -41,6 +41,14 @@ cargo audit
 
 PR CI: embedded e2e + stub contracts only. Live remote catalog and capacity campaigns run on AWS.
 
+**Correctness scenarios added for query hardening (CI + remote catalog):**
+
+| Scenario ID | Path | Asserts |
+|-------------|------|---------|
+| `gate-disabled-allows-debug` | Happy | Disabled gate persists debug-tier metric |
+| `query-limit-clamped` | Sad | Huge `limit` still returns ≤ emitted / clamp ceiling |
+| `query-reject-bad-filter-field` | Sad | Invalid filter field → `Error::Config` |
+
 ```bash
 cd infra/aws/spectra
 export AWS_KEY_NAME=your-key
@@ -49,7 +57,7 @@ export SSH_KEY_PATH=~/.ssh/your-key.pem
 ./provision.sh
 ./bootstrap.sh
 ./deploy-and-run-e2e.sh      # full ignored remote catalog + live contracts
-./deploy-and-run-bench.sh    # full BM-* × all backends
+./deploy-and-run-bench.sh    # full BM-* × all backends (re-run BM-SQ1/SQ3 after query hardening)
 ./fetch-reports.sh           # → profiling/spectra-bench/reports/
 ./teardown.sh
 ```

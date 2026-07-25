@@ -13,23 +13,29 @@
 //! - [`RemoteClient::connect`] — ClickHouse-protocol client wrapper
 //! - [`RemoteMetricsBackend::connect`] / [`RemoteEventsBackend::connect`] — parameterized backends
 //! - [`MetricInsertRow`] / [`EventInsertRow`] — row shapes for streaming inserts
+//! - [`redact_url_credentials`] — scrub connection secrets from error text
+//! - [`query_sql`] helpers — validated SQL fragments (`escape_str`, `scope_clause`, …)
 //!
 //! # Prerequisites and gotchas
 //!
 //! - Expects canonical table names from `spectra_core` (`spectra_metrics`, `spectra_events`).
+//! - Query builders validate metric/table/field identifiers and clamp event `limit`/`offset`
+//!   (`spectra_core::MAX_EVENT_QUERY_LIMIT`).
+//! - Storage errors pass through [`redact_url_credentials`] so URL userinfo is not echoed.
 //! - `query_aggregate` is not yet implemented (returns empty series).
 //! - Label filtering on metric range queries happens client-side after fetch.
 //!
-//! See also: the `spectra` crate crate documentation map (`cargo doc -p uf-spectra --open`).
+//! See also: the `spectra` crate documentation map (`cargo doc -p uf-spectra --open`).
 
 mod client;
 mod events;
 mod mem_store;
 mod metrics;
-mod query_sql;
+pub mod query_sql;
 
 pub use client::{
-    datetime_to_ch_ts, parse_rfc3339_ts, EventInsertRow, MetricInsertRow, RemoteClient,
+    datetime_to_ch_ts, parse_rfc3339_ts, redact_url_credentials, EventInsertRow, MetricInsertRow,
+    RemoteClient,
 };
 pub use events::RemoteEventsBackend;
 pub use metrics::RemoteMetricsBackend;

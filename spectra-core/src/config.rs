@@ -63,11 +63,26 @@ impl SpectraConfig {
     pub fn from_env() -> Self {
         let mut config = Self::default();
 
-        if matches!(
+        let gate_off_requested = matches!(
             std::env::var("SPECTRA_GATE").as_deref(),
             Ok("0") | Ok("false") | Ok("FALSE") | Ok("no") | Ok("NO")
-        ) {
-            config.enabled = false;
+        );
+        let force_off = matches!(
+            std::env::var("SPECTRA_GATE_FORCE_OFF").as_deref(),
+            Ok("1") | Ok("true") | Ok("TRUE") | Ok("yes") | Ok("YES")
+        );
+        if gate_off_requested {
+            if force_off {
+                config.enabled = false;
+            } else {
+                // Fail closed: ignore disable unless explicitly forced.
+                config.enabled = true;
+                tracing::warn!(
+                    SPECTRA_GATE = "off_requested",
+                    SPECTRA_GATE_FORCE_OFF = "missing",
+                    "SPECTRA_GATE disable ignored without SPECTRA_GATE_FORCE_OFF=1; emit gate stays enabled"
+                );
+            }
         }
 
         if let Ok(level) = std::env::var("SPECTRA_LEVEL") {
@@ -255,6 +270,20 @@ fn build_resolved(config: &SpectraConfig) -> HashMap<String, EmitPolicy> {
 }
 
 /// Install process-wide gate configuration (call once at host boot, before sink install).
+///
+/// When `config.enabled` is false, logs a **warn** that the emit gate is disabled (full
+/// emit volume). Prefer leaving the gate enabled in production; to disable via env use
+/// `SPECTRA_GATE=0` together with `SPECTRA_GATE_FORCE_OFF=1` (see [`SpectraConfig::from_env`]).
+///
+/// # Examples
+///
+/// ```
+/// use spectra_core::{install_config, SpectraConfig};
+///
+/// let mut config = SpectraConfig::default();
+/// config.enabled = true;
+/// install_config(config);
+/// ```
 pub fn install_config(config: SpectraConfig) {
     let gate = GateState {
         min_level: config.min_level,
@@ -264,12 +293,21 @@ pub fn install_config(config: SpectraConfig) {
     };
     let resolved = build_resolved(&config);
     *slot().write() = Some(InstalledConfig { gate, resolved });
-    tracing::info!(
-        enabled = config.enabled,
-        min_level = ?config.min_level,
-        global_sample_rate = config.global_sample_rate,
-        "emit gate installed"
-    );
+    if config.enabled {
+        tracing::info!(
+            enabled = true,
+            min_level = ?config.min_level,
+            global_sample_rate = config.global_sample_rate,
+            "emit gate installed"
+        );
+    } else {
+        tracing::warn!(
+            enabled = false,
+            min_level = ?config.min_level,
+            global_sample_rate = config.global_sample_rate,
+            "emit gate disabled — full emit volume allowed (set intentionally via SPECTRA_GATE_FORCE_OFF)"
+        );
+    }
 }
 
 pub(crate) fn gate_state() -> Option<GateState> {
@@ -322,5 +360,26 @@ sample_rate = 0.01
         assert!(
             (config.per_name["example_db_reads"].sample_rate.unwrap() - 0.01).abs() < f64::EPSILON
         );
+    }
+
+    #[tokio::test]
+    async fn gate_off_without_force_stays_enabled() {
+        let _g = crate::test_util::GLOBAL_TEST_LOCK.lock().await;
+        std::env::set_var("SPECTRA_GATE", "0");
+        std::env::remove_var("SPECTRA_GATE_FORCE_OFF");
+        let config = SpectraConfig::from_env();
+        assert!(config.enabled);
+        std::env::remove_var("SPECTRA_GATE");
+    }
+
+    #[tokio::test]
+    async fn gate_off_with_force_disables() {
+        let _g = crate::test_util::GLOBAL_TEST_LOCK.lock().await;
+        std::env::set_var("SPECTRA_GATE", "0");
+        std::env::set_var("SPECTRA_GATE_FORCE_OFF", "1");
+        let config = SpectraConfig::from_env();
+        assert!(!config.enabled);
+        std::env::remove_var("SPECTRA_GATE");
+        std::env::remove_var("SPECTRA_GATE_FORCE_OFF");
     }
 }

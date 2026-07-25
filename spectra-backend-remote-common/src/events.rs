@@ -114,12 +114,10 @@ impl EventStorageBackend for RemoteEventsBackend {
         match &self.inner {
             EventsInner::Mem(store) => store.query_rows(filter),
             EventsInner::Remote(client) => {
-                let scope = query_sql::scope_clause(&filter);
-                let extra = query_sql::filter_where_clause(&filter.filter);
-                let order = query_sql::order_clause(&filter);
-                let limit = filter.limit.unwrap_or(1000);
-                let offset = filter.offset.unwrap_or(0);
-                let paging = query_sql::limit_offset_clause(limit, offset);
+                let scope = query_sql::scope_clause(&filter)?;
+                let extra = query_sql::filter_where_clause(&filter.filter)?;
+                let order = query_sql::order_clause(&filter)?;
+                let paging = query_sql::paging_clause(&filter);
                 let sql = format!(
                     "SELECT fields, ts FROM spectra_events WHERE {scope}{extra} {order} {paging}"
                 );

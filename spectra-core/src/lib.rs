@@ -3,19 +3,48 @@
 //! Applications usually depend on the `spectra` crate, which re-exports this surface.
 //! The binary wires a [`SpectraSink`] at boot via [`set_sink`].
 //!
+//! # Features
+//!
+//! - **Emit entry points** — [`try_record_counter`], [`try_record_gauge`], [`try_log_event`]
+//!   (and `*_now` / `*_at` variants) with emit gating and optional buffering.
+//! - **Emit gate / config** — [`SpectraConfig`], [`install_config`]; env `SPECTRA_GATE` /
+//!   `SPECTRA_GATE_FORCE_OFF`, level, and sampling overrides.
+//! - **Query DTOs** — [`MetricsQuery`], [`EventQuery`], grid filters, and map helpers.
+//! - **Input validation** — [`validate_spectra_ident`] for metric/table/field tokens;
+//!   [`clamp_event_paging`] bounds event query `limit`/`offset`.
+//! - **Field classification** — [`FieldClassification`] plus [`mask_field_value`] for host/UI
+//!   display (PII / console safety). Query authz remains a host concern.
+//!
+//! # Entry points
+//!
+//! | Concern | API |
+//! |---------|-----|
+//! | Wire sink | [`set_sink`] |
+//! | Emit | [`try_record_counter`], [`try_log_event`], … |
+//! | Gate | [`install_config`], [`SpectraConfig::from_env`] |
+//! | Mask PII | [`mask_field_value`] |
+//! | Validate names | [`validate_spectra_ident`] |
+//! | Page bounds | [`clamp_event_paging`], [`MAX_EVENT_QUERY_LIMIT`] |
+//!
 //! # Re-entrancy
 //!
 //! [`try_record_counter`] and [`try_log_event`] no-op when called while already inside sink
 //! dispatch, preventing loops when a sink handler re-emits telemetry.
+//!
+//! # Notes
+//!
+//! Spectra does not implement session auth or Gauge permissions. Invalid emit names are
+//! dropped (debug log); invalid query identifiers return [`Error::Config`] from backends
+//! that validate before SQL.
 
 mod aggregate;
 mod classification;
 mod config;
 mod dispatcher;
 mod emit_buffer;
+mod entry;
 mod error;
 mod event_filter;
-mod entry;
 mod gate;
 mod query;
 mod query_map;
@@ -29,22 +58,23 @@ mod storage;
 mod test_util;
 mod topic;
 mod types;
+mod validate;
 
-pub use classification::FieldClassification;
+pub use classification::{mask_field_value, FieldClassification, PII_MASK};
 pub use config::{install_config, EmitPolicy, NameOverride, SpectraConfig};
 pub use emit_buffer::{
     current_emit_ts, drain, is_active, job_enabled, request_enabled, request_scope, with_emit_ts,
     worker_scope, BufferedEmit,
 };
-pub use error::{Error, Result};
-pub use event_filter::{
-    finalize_event_rows, matches_filter_item, paginate_event_rows, row_matches_filter,
-    row_matches_partition, sort_event_rows,
-};
 pub use entry::{
     set_sink, try_log_event, try_log_event_at, try_log_event_now, try_record_counter,
     try_record_counter_at, try_record_counter_now, try_record_gauge, try_record_gauge_at,
     try_record_gauge_now,
+};
+pub use error::{Error, Result};
+pub use event_filter::{
+    finalize_event_rows, matches_filter_item, paginate_event_rows, row_matches_filter,
+    row_matches_partition, sort_event_rows,
 };
 pub use query::{
     EventAggregateRequest, EventAggregateResult, EventAggregationSpec, EventExploreView,
@@ -78,6 +108,10 @@ pub use storage::{
 };
 pub use topic::{event_topic, metric_topic};
 pub use types::{MetricEmit, MetricKind, SpectraEvent};
+pub use validate::{
+    clamp_event_paging, is_valid_spectra_ident, validate_spectra_ident, MAX_EVENT_QUERY_LIMIT,
+    MAX_EVENT_QUERY_OFFSET, MAX_SPECTRA_IDENT_LEN,
+};
 
 /// Re-export for macro `inventory::submit!` in downstream crates.
 pub use quark::inventory;

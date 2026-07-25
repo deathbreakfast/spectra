@@ -1,100 +1,140 @@
 //! SQL fragments for remote event queries.
+//!
+//! Metric/table/field tokens are validated with [`spectra_core::validate_spectra_ident`]
+//! before interpolation. String literals use [`escape_str`] (rejects NUL). Event paging uses
+//! [`spectra_core::clamp_event_paging`].
 
-use spectra_core::{EventsQueryFilter, GridFilterItem, GridFilterOperator, GridLogicOperator};
+use spectra_core::{
+    clamp_event_paging, validate_spectra_ident, Error, EventsQueryFilter, GridFilterItem,
+    GridFilterOperator, GridLogicOperator, Result,
+};
 
-pub fn escape_str(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('\'', "\\'")
+/// Escape a string for use inside a single-quoted ClickHouse SQL literal.
+///
+/// Doubles `\` and `'`. Rejects NUL bytes so they cannot terminate or truncate literals.
+///
+/// # Errors
+///
+/// Returns [`Error::Config`] when `s` contains a NUL byte.
+pub fn escape_str(s: &str) -> Result<String> {
+    if s.contains('\0') {
+        return Err(Error::config(
+            "invalid SQL string literal: nul byte (operation=escape_str, reason=nul)",
+        ));
+    }
+    Ok(s.replace('\\', "\\\\").replace('\'', "\\'"))
 }
 
-pub fn scope_clause(filter: &EventsQueryFilter) -> String {
-    let mut clauses = vec![format!("table_name = '{}'", escape_str(&filter.table))];
+/// Build the table/time/partition scope clause.
+///
+/// # Errors
+///
+/// Returns [`Error::Config`] when `filter.table` is not a valid Spectra identifier.
+pub fn scope_clause(filter: &EventsQueryFilter) -> Result<String> {
+    validate_spectra_ident(&filter.table)?;
+    let mut clauses = vec![format!("table_name = '{}'", escape_str(&filter.table)?)];
     if let Some(start) = filter.start {
-        clauses.push(format!("ts >= '{}'", escape_str(&start.to_rfc3339())));
+        clauses.push(format!("ts >= '{}'", escape_str(&start.to_rfc3339())?));
     }
     if let Some(end) = filter.end {
-        clauses.push(format!("ts <= '{}'", escape_str(&end.to_rfc3339())));
+        clauses.push(format!("ts <= '{}'", escape_str(&end.to_rfc3339())?));
     }
     if let Some(ref p) = filter.partition {
         clauses.push(format!(
             "JSONExtractString(fields, 'partition') = '{}'",
-            escape_str(p)
+            escape_str(p)?
         ));
     }
-    clauses.join(" AND ")
+    Ok(clauses.join(" AND "))
 }
 
-pub fn filter_where_clause(filter: &spectra_core::GridFilterModel) -> String {
+/// Build an additional `AND (…)` filter clause from the grid model.
+///
+/// # Errors
+///
+/// Returns [`Error::Config`] when any filter field name is not a valid identifier, or when
+/// a filter value contains a NUL byte.
+pub fn filter_where_clause(filter: &spectra_core::GridFilterModel) -> Result<String> {
     if filter.items.is_empty() && filter.quick_filter_values.is_empty() {
-        return String::new();
+        return Ok(String::new());
     }
     let mut parts = Vec::new();
     for item in &filter.items {
-        if let Some(clause) = filter_item_clause(item) {
+        if let Some(clause) = filter_item_clause(item)? {
             parts.push(clause);
         }
     }
     if !filter.quick_filter_values.is_empty() {
-        let q = filter
-            .quick_filter_values
-            .iter()
-            .map(|v| format!("positionCaseInsensitive(fields, '{}') > 0", escape_str(v)))
-            .collect::<Vec<_>>()
-            .join(" OR ");
-        if !q.is_empty() {
-            parts.push(format!("({q})"));
+        let mut q_parts = Vec::new();
+        for v in &filter.quick_filter_values {
+            q_parts.push(format!(
+                "positionCaseInsensitive(fields, '{}') > 0",
+                escape_str(v)?
+            ));
+        }
+        if !q_parts.is_empty() {
+            parts.push(format!("({})", q_parts.join(" OR ")));
         }
     }
     if parts.is_empty() {
-        return String::new();
+        return Ok(String::new());
     }
     let op = match filter.logic_operator {
         GridLogicOperator::And => " AND ",
         GridLogicOperator::Or => " OR ",
     };
-    format!(" AND ({})", parts.join(op))
+    Ok(format!(" AND ({})", parts.join(op)))
 }
 
-fn field_path(field: &str) -> String {
+fn field_path(field: &str) -> Result<String> {
     if field == "ts" {
-        "ts".to_string()
-    } else {
-        format!("JSONExtractString(fields, '{}')", escape_str(field))
+        return Ok("ts".to_string());
     }
+    validate_spectra_ident(field)?;
+    Ok(format!(
+        "JSONExtractString(fields, '{}')",
+        escape_str(field)?
+    ))
 }
 
-fn filter_item_clause(item: &GridFilterItem) -> Option<String> {
-    let path = field_path(&item.field);
-    match item.operator {
-        GridFilterOperator::Equals => item
-            .value
-            .as_str()
-            .map(|v| format!("{path} = '{}'", escape_str(v)))
-            .or_else(|| {
+fn filter_item_clause(item: &GridFilterItem) -> Result<Option<String>> {
+    let path = field_path(&item.field)?;
+    Ok(match item.operator {
+        GridFilterOperator::Equals => {
+            if let Some(v) = item.value.as_str() {
+                Some(format!("{path} = '{}'", escape_str(v)?))
+            } else {
                 item.value
                     .as_f64()
                     .map(|v| format!("toFloat64OrZero({path}) = {v}"))
-            }),
-        GridFilterOperator::DoesNotEqual => item
-            .value
-            .as_str()
-            .map(|v| format!("{path} != '{}'", escape_str(v)))
-            .or_else(|| {
+            }
+        }
+        GridFilterOperator::DoesNotEqual => {
+            if let Some(v) = item.value.as_str() {
+                Some(format!("{path} != '{}'", escape_str(v)?))
+            } else {
                 item.value
                     .as_f64()
                     .map(|v| format!("toFloat64OrZero({path}) != {v}"))
-            }),
+            }
+        }
         GridFilterOperator::Contains => item
             .value
             .as_str()
-            .map(|v| format!("positionCaseInsensitive({path}, '{}') > 0", escape_str(v))),
+            .map(|v| {
+                escape_str(v).map(|esc| format!("positionCaseInsensitive({path}, '{esc}') > 0"))
+            })
+            .transpose()?,
         GridFilterOperator::StartsWith => item
             .value
             .as_str()
-            .map(|v| format!("startsWith(lower({path}), lower('{}'))", escape_str(v))),
+            .map(|v| escape_str(v).map(|esc| format!("startsWith(lower({path}), lower('{esc}'))")))
+            .transpose()?,
         GridFilterOperator::EndsWith => item
             .value
             .as_str()
-            .map(|v| format!("endsWith(lower({path}), lower('{}'))", escape_str(v))),
+            .map(|v| escape_str(v).map(|esc| format!("endsWith(lower({path}), lower('{esc}'))")))
+            .transpose()?,
         GridFilterOperator::IsEmpty => Some(format!("({path} = '' OR isNull({path}))")),
         GridFilterOperator::IsNotEmpty => Some(format!("({path} != '' AND isNotNull({path}))")),
         GridFilterOperator::GreaterThan => item
@@ -113,24 +153,33 @@ fn filter_item_clause(item: &GridFilterItem) -> Option<String> {
             .value
             .as_f64()
             .map(|v| format!("toFloat64OrZero({path}) <= {v}")),
-    }
+    })
 }
 
-pub fn order_clause(filter: &EventsQueryFilter) -> String {
+/// Build an `ORDER BY` clause.
+///
+/// # Errors
+///
+/// Returns [`Error::Config`] when `sort_field` is set and is not a valid identifier.
+pub fn order_clause(filter: &EventsQueryFilter) -> Result<String> {
     let dir = if filter.sort_desc { "DESC" } else { "ASC" };
     let field = filter.sort_field.as_deref().unwrap_or("ts");
     if field == "ts" {
-        format!("ORDER BY ts {dir}")
-    } else {
-        format!(
-            "ORDER BY JSONExtractString(fields, '{}') {dir}, ts {dir}",
-            escape_str(field)
-        )
+        return Ok(format!("ORDER BY ts {dir}"));
     }
+    validate_spectra_ident(field)?;
+    Ok(format!(
+        "ORDER BY JSONExtractString(fields, '{}') {dir}, ts {dir}",
+        escape_str(field)?
+    ))
 }
 
-/// `LIMIT` clause; omits `OFFSET 0` for TensorBase SQL compatibility.
+/// `LIMIT` / `OFFSET` clause after [`clamp_event_paging`].
+///
+/// Omits `OFFSET 0` for TensorBase SQL compatibility.
+#[must_use]
 pub fn limit_offset_clause(limit: u32, offset: u32) -> String {
+    let (limit, offset) = clamp_event_paging(Some(limit), Some(offset));
     if offset == 0 {
         format!("LIMIT {limit}")
     } else {
@@ -138,11 +187,21 @@ pub fn limit_offset_clause(limit: u32, offset: u32) -> String {
     }
 }
 
+/// Clamp and format paging from an [`EventsQueryFilter`].
+#[must_use]
+pub fn paging_clause(filter: &EventsQueryFilter) -> String {
+    let (limit, offset) = clamp_event_paging(filter.limit, filter.offset);
+    limit_offset_clause(limit, offset)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
-    use spectra_core::{EventsQueryFilter, GridFilterItem, GridFilterModel, GridFilterOperator};
+    use spectra_core::{
+        EventsQueryFilter, GridFilterItem, GridFilterModel, GridFilterOperator,
+        MAX_EVENT_QUERY_LIMIT,
+    };
 
     #[test]
     fn scope_includes_table() {
@@ -150,7 +209,17 @@ mod tests {
             table: "req_log".into(),
             ..Default::default()
         };
-        assert!(scope_clause(&filter).contains("table_name = 'req_log'"));
+        let scope = scope_clause(&filter).expect("scope");
+        assert!(scope.contains("table_name = 'req_log'"));
+    }
+
+    #[test]
+    fn scope_rejects_bad_table() {
+        let filter = EventsQueryFilter {
+            table: "req; DROP".into(),
+            ..Default::default()
+        };
+        assert!(scope_clause(&filter).is_err());
     }
 
     #[test]
@@ -177,13 +246,36 @@ mod tests {
                 }],
                 ..Default::default()
             };
-            let clause = filter_where_clause(&model);
+            let clause = filter_where_clause(&model).expect("filter");
             assert!(
                 clause.starts_with(" AND ("),
                 "expected clause for {:?}",
                 model.items[0].operator
             );
         }
+    }
+
+    #[test]
+    fn filter_rejects_bad_field() {
+        let model = GridFilterModel {
+            items: vec![GridFilterItem {
+                field: "msg; DROP".into(),
+                operator: GridFilterOperator::Equals,
+                value: json!("x"),
+            }],
+            ..Default::default()
+        };
+        assert!(filter_where_clause(&model).is_err());
+    }
+
+    #[test]
+    fn escape_quotes_and_backslashes() {
+        assert_eq!(escape_str(r"a'b\c").expect("esc"), r"a\'b\\c");
+    }
+
+    #[test]
+    fn escape_rejects_nul() {
+        assert!(escape_str("a\0b").is_err());
     }
 
     #[test]
@@ -194,8 +286,24 @@ mod tests {
             sort_desc: true,
             ..Default::default()
         };
-        let order = order_clause(&filter);
+        let order = order_clause(&filter).expect("order");
         assert!(order.contains("JSONExtractString(fields, 'region')"));
         assert!(order.contains("DESC"));
+    }
+
+    #[test]
+    fn order_rejects_bad_sort_field() {
+        let filter = EventsQueryFilter {
+            table: "t".into(),
+            sort_field: Some("region DESC;--".into()),
+            ..Default::default()
+        };
+        assert!(order_clause(&filter).is_err());
+    }
+
+    #[test]
+    fn paging_clamps_huge_limit() {
+        let clause = limit_offset_clause(u32::MAX, 0);
+        assert_eq!(clause, format!("LIMIT {MAX_EVENT_QUERY_LIMIT}"));
     }
 }

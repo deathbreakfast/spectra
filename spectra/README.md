@@ -47,11 +47,14 @@ Loaded by `SpectraConfig::from_env()` unless `.config(...)` overrides.
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `SPECTRA_GATE` | on | Set `0`/`false`/`no` to disable the emit gate (fail-open) |
+| `SPECTRA_GATE` | on | Request disable with `0`/`false`/`no` (ignored unless force-off is set) |
+| `SPECTRA_GATE_FORCE_OFF` | unset | Set `1`/`true`/`yes` with `SPECTRA_GATE=0` to actually disable the emit gate |
 | `SPECTRA_LEVEL` | `info` | Global minimum verbosity (`error` … `trace`) |
 | `SPECTRA_SAMPLE_RATE` | `1.0` | Global sample floor after level check |
 | `SPECTRA_SAMPLE_<NAME>` | — | Per metric/event name override (`0.0`–`1.0`) |
 | `SPECTRA_CONFIG` | — | Path to TOML file with a `[spectra]` table |
+
+Event query paging is clamped in-library (`MAX_EVENT_QUERY_LIMIT` = 1000). Metric/table/field identifiers must match `validate_spectra_ident`. See repository [`SECURITY.md`](../SECURITY.md).
 
 ### Emit buffer (embedded profile)
 

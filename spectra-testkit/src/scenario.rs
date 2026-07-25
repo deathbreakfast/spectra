@@ -122,6 +122,7 @@ impl ScenarioSpec {
                 ScenarioStep::ConfigureGate {
                     min_level: "info".to_string(),
                     debug_metric_names: vec!["gate_debug_probe".to_string()],
+                    enabled: true,
                 },
                 ScenarioStep::EmitCounter {
                     name: "gate_debug_probe".to_string(),
@@ -244,6 +245,71 @@ impl ScenarioSpec {
             ],
         }
     }
+
+    /// Disabled emit gate allows debug-tier metric that would otherwise drop (happy path).
+    pub fn gate_disabled_allows_debug() -> Self {
+        Self {
+            id: "gate-disabled-allows-debug".to_string(),
+            steps: vec![
+                ScenarioStep::ConfigureGate {
+                    min_level: "info".to_string(),
+                    debug_metric_names: vec!["gate_disabled_probe".to_string()],
+                    enabled: false,
+                },
+                ScenarioStep::EmitCounter {
+                    name: "gate_disabled_probe".to_string(),
+                    labels: vec![],
+                    delta: 1,
+                },
+                ScenarioStep::WaitUntilMetricCount {
+                    name: "gate_disabled_probe".to_string(),
+                    labels: vec![],
+                    expected: 1,
+                    timeout_ms: DEFAULT_VISIBILITY_TIMEOUT_MS,
+                },
+            ],
+        }
+    }
+
+    /// Event query with huge limit returns at most the clamp maximum (sad/clamp path).
+    pub fn query_limit_clamped() -> Self {
+        Self {
+            id: "query-limit-clamped".to_string(),
+            steps: vec![
+                ScenarioStep::EmitSmokeEvent {
+                    message: "clamp-a".to_string(),
+                },
+                ScenarioStep::EmitSmokeEvent {
+                    message: "clamp-b".to_string(),
+                },
+                ScenarioStep::WaitUntilEventCount {
+                    table: "platform_smoke_event".to_string(),
+                    expected: 2,
+                    timeout_ms: DEFAULT_VISIBILITY_TIMEOUT_MS,
+                },
+                ScenarioStep::AssertEventCountWithLimit {
+                    table: "platform_smoke_event".to_string(),
+                    limit: u32::MAX,
+                    max_rows: 2,
+                },
+            ],
+        }
+    }
+
+    /// Event query with an injection-shaped filter field is rejected (sad path).
+    pub fn query_reject_bad_filter_field() -> Self {
+        Self {
+            id: "query-reject-bad-filter-field".to_string(),
+            steps: vec![ScenarioStep::QueryEventsExpectInvalidFilter {
+                table: "platform_smoke_event".to_string(),
+                bad_field: "msg; DROP".to_string(),
+            }],
+        }
+    }
+}
+
+fn default_gate_enabled() -> bool {
+    true
 }
 
 /// One declarative step in a [`ScenarioSpec`] (emit, assert, or sleep).
@@ -284,6 +350,25 @@ pub enum ScenarioStep {
         min_level: String,
         /// Metric names to treat as debug-tier via per-name overrides.
         debug_metric_names: Vec<String>,
+        /// When false, the emit gate is disabled (full volume). Defaults to true.
+        #[serde(default = "default_gate_enabled")]
+        enabled: bool,
+    },
+    /// Query events with an explicit limit and assert row count is ≤ `max_rows` (paging clamp).
+    AssertEventCountWithLimit {
+        /// Event table name to query.
+        table: String,
+        /// Requested limit (may exceed the core max event query limit).
+        limit: u32,
+        /// Maximum acceptable row count after clamp.
+        max_rows: u32,
+    },
+    /// Query events with an invalid filter field; expect a config/validation error.
+    QueryEventsExpectInvalidFilter {
+        /// Event table name to query.
+        table: String,
+        /// Invalid field name that must be rejected before SQL execution.
+        bad_field: String,
     },
     /// Assert persisted metric point count after async flush.
     AssertMetricCount {

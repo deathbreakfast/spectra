@@ -4,8 +4,9 @@ use std::time::Instant;
 
 use spectra::helpers::{PlatformSmokeCounterRecorder, PlatformSmokeEventLogger};
 use spectra::spectra_core::{
-    current_emit_ts, install_config, try_record_counter_now, try_record_gauge_now,
-    EventsQueryFilter, LabelMatcher, MetricsQueryRange, NameOverride, SpectraConfig, SpectraLevel,
+    current_emit_ts, install_config, try_record_counter_now, try_record_gauge_now, Error,
+    EventsQueryFilter, GridFilterItem, GridFilterModel, GridFilterOperator, LabelMatcher,
+    MetricsQueryRange, NameOverride, SpectraConfig, SpectraLevel, MAX_EVENT_QUERY_LIMIT,
 };
 
 use crate::bootstrap::{BootstrapSession, InstalledSpectra};
@@ -105,6 +106,10 @@ fn step_label(step: &ScenarioStep) -> String {
         ScenarioStep::AssertMetricCount { .. } => "assert_metric_count".into(),
         ScenarioStep::AssertMetricCountWithLabels { .. } => "assert_metric_count_labels".into(),
         ScenarioStep::AssertEventCount { .. } => "assert_event_count".into(),
+        ScenarioStep::AssertEventCountWithLimit { .. } => "assert_event_count_with_limit".into(),
+        ScenarioStep::QueryEventsExpectInvalidFilter { .. } => {
+            "query_events_expect_invalid_filter".into()
+        }
         ScenarioStep::AssertTransportCounterCount { .. } => "assert_transport_counter".into(),
         ScenarioStep::SleepMs { .. } => "sleep".into(),
         ScenarioStep::WaitUntilMetricCount { .. } => "wait_until_metric_count".into(),
@@ -155,25 +160,18 @@ async fn execute_step(
         ScenarioStep::ConfigureGate {
             min_level,
             debug_metric_names,
+            enabled,
         } => {
-            let min_level = SpectraLevel::parse(min_level).unwrap_or(SpectraLevel::Info);
-            let mut per_name = std::collections::HashMap::new();
-            for name in debug_metric_names {
-                per_name.insert(
-                    name.clone(),
-                    NameOverride {
-                        level: Some(SpectraLevel::Debug),
-                        ..Default::default()
-                    },
-                );
-            }
-            install_config(SpectraConfig {
-                enabled: true,
-                min_level,
-                per_name,
-                ..Default::default()
-            });
+            apply_configure_gate(min_level, debug_metric_names, *enabled);
             Ok(())
+        }
+        ScenarioStep::AssertEventCountWithLimit {
+            table,
+            limit,
+            max_rows,
+        } => assert_event_count_with_limit(installed, table, *limit, *max_rows, mode).await,
+        ScenarioStep::QueryEventsExpectInvalidFilter { table, bad_field } => {
+            query_events_expect_invalid_filter(installed, table, bad_field, mode).await
         }
         ScenarioStep::SleepMs { ms } => {
             tokio::time::sleep(std::time::Duration::from_millis(*ms)).await;
@@ -354,7 +352,97 @@ async fn query_metric_count(
     Ok(points.len() as u32)
 }
 
+fn apply_configure_gate(min_level: &str, debug_metric_names: &[String], enabled: bool) {
+    let min_level = SpectraLevel::parse(min_level).unwrap_or(SpectraLevel::Info);
+    let mut per_name = std::collections::HashMap::new();
+    for name in debug_metric_names {
+        per_name.insert(
+            name.clone(),
+            NameOverride {
+                level: Some(SpectraLevel::Debug),
+                ..Default::default()
+            },
+        );
+    }
+    install_config(SpectraConfig {
+        enabled,
+        min_level,
+        per_name,
+        ..Default::default()
+    });
+}
+
+async fn assert_event_count_with_limit(
+    installed: &InstalledSpectra,
+    table: &str,
+    limit: u32,
+    max_rows: u32,
+    mode: DriverKind,
+) -> Result<(), String> {
+    let count = query_event_count_with_limit(installed, table, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    if mode == DriverKind::Benchmark {
+        return Ok(());
+    }
+    let ceiling = max_rows.min(MAX_EVENT_QUERY_LIMIT);
+    if count > ceiling {
+        return Err(format!(
+            "event {table}: expected ≤ {ceiling} rows with limit={limit}, got {count}"
+        ));
+    }
+    Ok(())
+}
+
+async fn query_events_expect_invalid_filter(
+    installed: &InstalledSpectra,
+    table: &str,
+    bad_field: &str,
+    mode: DriverKind,
+) -> Result<(), String> {
+    if mode == DriverKind::Benchmark {
+        return Ok(());
+    }
+    let now = current_emit_ts();
+    let result = installed
+        .spectra
+        .router()
+        .query_events(EventsQueryFilter {
+            table: table.to_string(),
+            start: Some(now - chrono::Duration::seconds(30)),
+            end: Some(now + chrono::Duration::seconds(5)),
+            filter: GridFilterModel {
+                items: vec![GridFilterItem {
+                    field: bad_field.to_string(),
+                    operator: GridFilterOperator::Equals,
+                    value: serde_json::json!("x"),
+                }],
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .await;
+    match result {
+        Err(Error::Config(_)) => Ok(()),
+        Err(other) => Err(format!(
+            "expected Config error for bad field {bad_field:?}, got {other}"
+        )),
+        Ok(rows) => Err(format!(
+            "expected Config error for bad field {bad_field:?}, got {} rows",
+            rows.len()
+        )),
+    }
+}
+
 async fn query_event_count(installed: &InstalledSpectra, table: &str) -> anyhow::Result<u32> {
+    query_event_count_with_limit(installed, table, MAX_EVENT_QUERY_LIMIT).await
+}
+
+async fn query_event_count_with_limit(
+    installed: &InstalledSpectra,
+    table: &str,
+    limit: u32,
+) -> anyhow::Result<u32> {
     let now = current_emit_ts();
     let rows = installed
         .spectra
@@ -363,6 +451,7 @@ async fn query_event_count(installed: &InstalledSpectra, table: &str) -> anyhow:
             table: table.to_string(),
             start: Some(now - chrono::Duration::seconds(30)),
             end: Some(now + chrono::Duration::seconds(5)),
+            limit: Some(limit),
             ..Default::default()
         })
         .await?;

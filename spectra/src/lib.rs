@@ -19,9 +19,17 @@
 //! - **Composable storage** — inject backends on the builder: in-memory (`mem`), durable embedded
 //!   (`sqlite`), or remote (`clickhouse`, `tensorbase`).
 //! - **Emit controls** — global and per-name level gates, sampling, optional request/job buffers,
-//!   and async batched persist (overrides schema defaults).
+//!   and async batched persist (overrides schema defaults). `SPECTRA_GATE=0` is ignored unless
+//!   `SPECTRA_GATE_FORCE_OFF=1` is also set (fail-closed).
+//! - **Query input validation** — metric/table/field tokens must match
+//!   [`validate_spectra_ident`]; invalid filter fields return [`Error::Config`] before SQL runs.
+//! - **Query paging clamps** — event queries clamp `limit`/`offset` to
+//!   [`MAX_EVENT_QUERY_LIMIT`] / [`MAX_EVENT_QUERY_OFFSET`].
+//! - **Field classification helpers** — [`mask_field_value`] for host/UI display of PII columns
+//!   (query authz remains a host/Gauge concern; see repository `SECURITY.md`).
 //! - **Diagnostics** — library crates emit structured `tracing` events; hosts initialize a
-//!   `tracing_subscriber` (see the `quickstart` example).
+//!   `tracing_subscriber` (see the `quickstart` example). Remote storage errors redact URL
+//!   credentials before surfacing.
 //! - **Query API** — read metrics and events through [`SpectraRouter`] with label and time-range
 //!   filters.
 //! - **Direct or distributed wiring** — one process can write storage, or many publishers can
@@ -454,11 +462,12 @@ pub mod topics;
 /// Re-export for schema macro `inventory::submit!` expansions.
 pub use spectra_core::inventory;
 pub use spectra_core::{
-    self, try_log_event_at, try_log_event_now, try_record_counter, try_record_counter_at,
-    try_record_counter_now, try_record_gauge_at, try_record_gauge_now, ChainedSink, Error,
-    FieldClassification, LoggingKind, MetricEmit, RecordingSink, Result, SchemaFieldMetadata,
-    SchemaMetadata, SchemaMetadataInit, SchemaRegistry, SpectraEvent, SpectraLevel, SpectraRouter,
-    SpectraSink,
+    self, clamp_event_paging, mask_field_value, try_log_event_at, try_log_event_now,
+    try_record_counter, try_record_counter_at, try_record_counter_now, try_record_gauge_at,
+    try_record_gauge_now, validate_spectra_ident, ChainedSink, Error, FieldClassification,
+    LoggingKind, MetricEmit, RecordingSink, Result, SchemaFieldMetadata, SchemaMetadata,
+    SchemaMetadataInit, SchemaRegistry, SpectraEvent, SpectraLevel, SpectraRouter, SpectraSink,
+    MAX_EVENT_QUERY_LIMIT, MAX_EVENT_QUERY_OFFSET, PII_MASK,
 };
 pub use spectra_macros::{spectra_metric, spectra_schema};
 pub use spectra_runtime::{

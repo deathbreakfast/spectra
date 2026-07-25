@@ -63,6 +63,8 @@ flowchart TD
 
 Your application owns identity, routing, and business logic. Spectra owns observability semantics: classification metadata, emit buffering, registry discovery, and query DTOs. Storage engines live in feature-gated `spectra-backend-*` crates.
 
+**Security / hardening:** query identifier validation, event paging clamps, emit-gate force-off, URL credential redaction, and PII mask helpers — see [`SECURITY.md`](SECURITY.md) and `cargo doc -p uf-spectra --open` → Features.
+
 **Topology vocabulary:** **embedded** (in-process store) vs **remote** (network-backed store). Assembly uses builder methods — not a global deployment mode enum.
 
 ## Quick start

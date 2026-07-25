@@ -18,10 +18,13 @@ Inline tests stay for schema registry smoke and query DTO mapping.
 - transport dual-path (recording sink + storage)
 - transport-only when persist is disabled (sad path)
 - emit gate drops debug-tier metrics (sad path)
+- disabled emit gate allows debug-tier metrics (happy path)
 - labeled metric query hit and miss (happy / sad)
 - gauge persist roundtrip
 - empty metric query window (sad path)
 - console NDJSON telemetry row (happy path)
+- event query limit clamp (sad path — huge limit)
+- reject invalid event filter field (sad path — `Error::Config`)
 
 Performance budgets belong in [`spectra-bench`](../spectra-bench/README.md).
 
@@ -29,7 +32,7 @@ Performance budgets belong in [`spectra-bench`](../spectra-bench/README.md).
 
 | Trigger | Scope | Command |
 |---------|-------|---------|
-| Push / PR | **Core** — 9 scenarios × embedded matrix | `cargo test -p spectra-e2e` |
+| Push / PR | **Core** — 12 scenarios × embedded matrix | `cargo test -p spectra-e2e` |
 | Git tag `v*` | **Extended** — remote storage + live contracts | see `ci-extended.yml` |
 
 PR CI also runs storage port contracts: `cargo test -p spectra-backend-{mem,sqlite,tensorbase,clickhouse} --test storage_contract`.
@@ -49,6 +52,9 @@ PR CI also runs storage port contracts: `cargo test -p spectra-backend-{mem,sqli
 | `gauge-roundtrip` | Happy | ✓ | ✓ | ✓ | ✓ |
 | `query-time-range-empty` | Sad | ✓ | ✓ | ✓ | ✓ |
 | `telemetry-console-ndjson` | Happy | ✓ | — | — | — |
+| `gate-disabled-allows-debug` | Happy | ✓ | ✓ | ✓ | ✓ |
+| `query-limit-clamped` | Sad | ✓ | ✓ | ✓ | ✓ |
+| `query-reject-bad-filter-field` | Sad | ✓ | ✓ | ✓ | ✓ |
 
 Remote rows use `Topology::RemoteIngest` (`remote_ingest` submodule) and require `SPECTRA_TENSORBASE_URL` / `SPECTRA_CLICKHOUSE_URL`. Soft-skip when the URL for a storage is unset.
 

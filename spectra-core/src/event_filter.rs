@@ -11,11 +11,15 @@ use crate::query::{GridFilterItem, GridFilterModel, GridFilterOperator, GridLogi
 use crate::storage::{EventRow, EventsQueryFilter};
 
 /// Apply grid filter, partition, sort, and pagination to table/time-scoped rows.
+///
+/// Pagination applies [`crate::clamp_event_paging`] so in-process backends honor the same
+/// maxima as remote SQL (`MAX_EVENT_QUERY_LIMIT` / `MAX_EVENT_QUERY_OFFSET`).
 pub fn finalize_event_rows(mut rows: Vec<EventRow>, filter: &EventsQueryFilter) -> Vec<EventRow> {
     rows.retain(|r| row_matches_partition(r, filter.partition.as_deref()));
     rows.retain(|r| row_matches_filter(r, &filter.filter));
     sort_event_rows(&mut rows, filter.sort_field.as_deref(), filter.sort_desc);
-    paginate_event_rows(rows, filter.limit, filter.offset)
+    let (limit, offset) = crate::clamp_event_paging(filter.limit, filter.offset);
+    paginate_event_rows(rows, Some(limit), Some(offset))
 }
 
 /// Whether `row` matches optional `partition` against `fields.partition`.

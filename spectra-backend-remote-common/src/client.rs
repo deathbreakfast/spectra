@@ -5,8 +5,61 @@ use std::path::{Path, PathBuf};
 use clickhouse::Client as HttpClient;
 use spectra_core::{Error, Result};
 
+/// Redact `userinfo` (credentials) from URLs embedded in error or log text.
+///
+/// Replaces `scheme://user:pass@host` with `scheme://***@host`. Non-URL strings are
+/// returned unchanged except that substrings matching that pattern are scrubbed.
+///
+/// # Examples
+///
+/// ```
+/// use spectra_backend_remote_common::redact_url_credentials;
+///
+/// let redacted = redact_url_credentials("http://user:s3cret@localhost:8123/db");
+/// assert!(!redacted.contains("s3cret"));
+/// assert!(redacted.contains("***@"));
+/// ```
+#[must_use]
+pub fn redact_url_credentials(input: &str) -> String {
+    // Scrub `://user:password@` (password may contain URL-encoded chars except '@').
+    let mut out = String::with_capacity(input.len());
+    let bytes = input.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if let Some(rel) = find_userinfo_start(&input[i..]) {
+            let abs = i + rel;
+            out.push_str(&input[i..abs]);
+            // abs points at first char of userinfo; find '@'
+            if let Some(at_rel) = input[abs..].find('@') {
+                out.push_str("***@");
+                i = abs + at_rel + 1;
+                continue;
+            }
+        }
+        out.push(input[i..].chars().next().unwrap_or('\0'));
+        i += input[i..].chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+    }
+    out
+}
+
+fn find_userinfo_start(s: &str) -> Option<usize> {
+    let mut search_from = 0;
+    while let Some(scheme_rel) = s[search_from..].find("://") {
+        let after_scheme = search_from + scheme_rel + 3;
+        let rest = &s[after_scheme..];
+        if let Some(at) = rest.find('@') {
+            let userinfo = &rest[..at];
+            if userinfo.contains(':') && !userinfo.contains('/') {
+                return Some(after_scheme);
+            }
+        }
+        search_from = after_scheme;
+    }
+    None
+}
+
 pub(crate) fn map_remote(e: impl std::error::Error + Send + Sync + 'static) -> Error {
-    let message = e.to_string();
+    let message = redact_url_credentials(&e.to_string());
     Error::storage_source(message, e)
 }
 
@@ -301,6 +354,8 @@ fn parse_host_port(addr: &str) -> Result<(String, u16)> {
 }
 
 fn sql_quote(s: &str) -> String {
+    // Insert path is trusted in-process data; still strip NUL to avoid truncated literals.
+    let s = s.replace('\0', "");
     format!("'{}'", s.replace('\\', "\\\\").replace('\'', "\\'"))
 }
 
@@ -418,4 +473,32 @@ async fn run_native_select(endpoint: &NativeEndpoint, sql: &str) -> Result<Vec<V
         .filter(|line| !line.is_empty())
         .map(|line| line.split('\t').map(str::to_string).collect())
         .collect())
+}
+
+#[cfg(test)]
+mod redact_tests {
+    use super::redact_url_credentials;
+
+    #[test]
+    fn redacts_password_from_http_url() {
+        let out = redact_url_credentials("http://user:s3cret@localhost:8123/db");
+        assert!(!out.contains("s3cret"));
+        assert!(!out.contains("user:"));
+        assert!(out.contains("***@localhost:8123"));
+    }
+
+    #[test]
+    fn leaves_url_without_userinfo() {
+        let url = "http://localhost:8123/";
+        assert_eq!(redact_url_credentials(url), url);
+    }
+
+    #[test]
+    fn redacts_inside_longer_error_message() {
+        let out = redact_url_credentials(
+            "storage error: failed to connect to https://admin:hunter2@db.example:8443/x",
+        );
+        assert!(!out.contains("hunter2"));
+        assert!(out.contains("***@db.example"));
+    }
 }

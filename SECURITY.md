@@ -14,6 +14,26 @@ Include a clear description, impact assessment, and reproduction steps when poss
 
 We aim to acknowledge reports within a few business days.
 
+## Threat model (L0 library)
+
+Spectra is an **in-process** observability library. It does **not** implement session authentication, Gauge permissions, or HTTP ACL. Hosts (Orbital / Lepton / Gauge) own query authorization.
+
+| Trust assumption | Library behavior |
+|------------------|------------------|
+| Emit callers are in-process | Dynamic metric/table names are charset-validated; invalid names are dropped |
+| Query DTOs may be attacker-controlled once hosts expose them | Identifiers validated; event `limit`/`offset` clamped; SQL literals escaped / NUL rejected |
+| Connection URLs may contain secrets | Remote error mapping redacts URL userinfo |
+| Operators control env | `SPECTRA_GATE=0` requires `SPECTRA_GATE_FORCE_OFF=1` to disable the emit gate |
+
+Hosts should:
+
+- Enforce `spectra.query.{table}` (or equivalent) before calling query APIs.
+- Call [`mask_field_value`](spectra-core) before rendering fields classified as PII.
+- Prefer Neutrino (or equivalent) for ClickHouse credentials rather than logging raw URLs.
+- Keep ingest / readiness HTTP endpoints off the public internet (host/runtime concern).
+
+Discoverable API docs: `cargo doc -p uf-spectra --open` → **Features** (validation, paging clamps, gate, classification).
+
 ## Supply-chain checks
 
 Maintainers run `cargo deny check` (see [`deny.toml`](deny.toml)) in CI. Optional local guidance:

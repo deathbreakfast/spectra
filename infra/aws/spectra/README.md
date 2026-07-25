@@ -29,6 +29,16 @@ export SSH_KEY_PATH=$HOME/.ssh/your-key.pem
 ./teardown.sh
 ```
 
+### Correctness scenarios added this release (query hardening)
+
+Remote catalog (ignored locally; run via `deploy-and-run-e2e.sh`) includes:
+
+- `gate-disabled-allows-debug` (happy)
+- `query-limit-clamped` (sad / clamp)
+- `query-reject-bad-filter-field` (sad / validation)
+
+After e2e, prefer re-running **BM-SQ1** and **BM-SQ3** so query validation overhead is reflected in [`docs/bench/PERFORMANCE_STUDY.md`](../../../docs/bench/PERFORMANCE_STUDY.md).
+
 After `fetch-reports.sh`, fill scoreboards in [`docs/bench/PERFORMANCE_STUDY.md`](../../../docs/bench/PERFORMANCE_STUDY.md) from JSON under `profiling/spectra-bench/reports/`.
 
 ## On-host scripts

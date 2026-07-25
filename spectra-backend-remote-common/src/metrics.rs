@@ -157,14 +157,15 @@ impl MetricsStorageBackend for RemoteMetricsBackend {
         match &self.inner {
             MetricsInner::Mem(store) => store.query_range(query),
             MetricsInner::Remote(client) => {
+                spectra_core::validate_spectra_ident(&query.metric_name)?;
                 let start = query.start.to_rfc3339();
                 let end = query.end.to_rfc3339();
                 let sql = format!(
                     "SELECT value, labels, ts FROM spectra_metrics \
                      WHERE name = '{}' AND ts >= '{}' AND ts <= '{}' ORDER BY ts ASC",
-                    query_sql::escape_str(&query.metric_name),
-                    query_sql::escape_str(&start),
-                    query_sql::escape_str(&end)
+                    query_sql::escape_str(&query.metric_name)?,
+                    query_sql::escape_str(&start)?,
+                    query_sql::escape_str(&end)?
                 );
                 let rows = client.query_metric_rows(&sql).await?;
                 let mut out = Vec::new();

@@ -107,19 +107,30 @@ impl SpectraRouter {
     }
 
     /// Queries event rows through the resolved backend.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::Config`] when the table name, sort field, or any grid filter
+    /// field fails [`crate::validate_spectra_ident`].
     pub async fn query_events(
         &self,
         filter: EventsQueryFilter,
     ) -> Result<Vec<crate::storage::EventRow>> {
+        validate_events_query(&filter)?;
         let backend = self.resolve_event(&filter.table);
         backend.query_rows(filter).await
     }
 
     /// Queries metric points through the resolved backend.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::Config`] when `metric_name` is not a valid Spectra identifier.
     pub async fn query_metrics(
         &self,
         query: MetricsQueryRange,
     ) -> Result<Vec<crate::storage::MetricPoint>> {
+        crate::validate_spectra_ident(&query.metric_name)?;
         let backend = self.resolve_metrics(&query.metric_name);
         backend.query_range(query).await
     }
@@ -129,6 +140,15 @@ impl SpectraRouter {
         &self,
         filter: EventsAggregateFilter,
     ) -> Result<EventAggregateResult> {
+        crate::validate_spectra_ident(&filter.table)?;
+        if let Some(ref field) = filter.group_by_field {
+            crate::validate_spectra_ident(field)?;
+        }
+        for item in &filter.filter.items {
+            if item.field != "ts" {
+                crate::validate_spectra_ident(&item.field)?;
+            }
+        }
         let table = filter.table.clone();
         let backend = self.resolve_event(&table);
         backend.query_aggregate(filter).await
@@ -156,6 +176,21 @@ impl SpectraRouter {
     pub fn try_global() -> Option<Arc<Self>> {
         GLOBAL_ROUTER.get().cloned()
     }
+}
+
+fn validate_events_query(filter: &EventsQueryFilter) -> Result<()> {
+    crate::validate_spectra_ident(&filter.table)?;
+    if let Some(ref field) = filter.sort_field {
+        if field != "ts" {
+            crate::validate_spectra_ident(field)?;
+        }
+    }
+    for item in &filter.filter.items {
+        if item.field != "ts" {
+            crate::validate_spectra_ident(&item.field)?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -219,5 +254,29 @@ mod tests {
                 .expect("append");
         });
         assert_eq!(counting.appends.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn query_events_rejects_bad_filter_field() {
+        use crate::error::Error;
+        use crate::{GridFilterItem, GridFilterModel, GridFilterOperator};
+
+        let router = SpectraRouter::new();
+        let rt = tokio::runtime::Runtime::new().expect("runtime");
+        let err = rt
+            .block_on(router.query_events(EventsQueryFilter {
+                table: "req_log".into(),
+                filter: GridFilterModel {
+                    items: vec![GridFilterItem {
+                        field: "msg; DROP".into(),
+                        operator: GridFilterOperator::Equals,
+                        value: json!("x"),
+                    }],
+                    ..Default::default()
+                },
+                ..Default::default()
+            }))
+            .expect_err("invalid filter field");
+        assert!(matches!(err, Error::Config(_)));
     }
 }
