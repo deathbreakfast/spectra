@@ -15,7 +15,7 @@ mod dispatcher;
 mod emit_buffer;
 mod error;
 mod event_filter;
-mod facade;
+mod entry;
 mod gate;
 mod query;
 mod query_map;
@@ -41,7 +41,7 @@ pub use event_filter::{
     finalize_event_rows, matches_filter_item, paginate_event_rows, row_matches_filter,
     row_matches_partition, sort_event_rows,
 };
-pub use facade::{
+pub use entry::{
     set_sink, try_log_event, try_log_event_at, try_log_event_now, try_record_counter,
     try_record_counter_at, try_record_counter_now, try_record_gauge, try_record_gauge_at,
     try_record_gauge_now,

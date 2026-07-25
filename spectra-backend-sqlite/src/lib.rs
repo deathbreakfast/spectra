@@ -89,7 +89,7 @@ fn labels_match(labels: &Value, matchers: &[LabelMatcher]) -> bool {
 ///
 /// # Examples
 ///
-/// Facade wiring through `Spectra::builder()` (requires the `spectra` crate with the
+/// Public crate wiring through `Spectra::builder()` (requires the `spectra` crate with the
 /// `sqlite` feature):
 ///
 /// ```ignore
@@ -267,7 +267,7 @@ impl MetricsStorageBackend for SqliteMetricsBackend {
 ///
 /// # Examples
 ///
-/// Facade wiring through `Spectra::builder()` (requires the `spectra` crate with the
+/// Public crate wiring through `Spectra::builder()` (requires the `spectra` crate with the
 /// `sqlite` feature):
 ///
 /// ```ignore

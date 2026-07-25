@@ -13,7 +13,7 @@ Shared remote storage logic for ClickHouse-protocol Spectra backends.
 
 - `RemoteClient`, `RemoteMetricsBackend`, `RemoteEventsBackend`
 - Used by `spectra-backend-clickhouse` and `spectra-backend-tensorbase`
-- **Not** re-exported from the public `spectra` facade — enable `clickhouse` or `tensorbase` features instead
+- **Not** re-exported from the public `spectra` crate — enable `clickhouse` or `tensorbase` features instead
 
 ## Status
 

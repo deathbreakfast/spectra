@@ -17,7 +17,7 @@ pub(crate) static MATRIX_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex:
 
 /// Holds an installed Spectra runtime for scenario execution.
 pub struct InstalledSpectra {
-    /// Installed facade runtime (router + global sink).
+    /// Installed public crate runtime (router + global sink).
     pub spectra: Spectra,
     /// Matrix row this installation corresponds to.
     pub matrix: MatrixSpec,

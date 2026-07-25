@@ -12,7 +12,7 @@ In-memory metrics and events backend.
 ## Role
 
 - `MemMetricsBackend` and `MemEventsBackend`
-- Facade default backend (`default = ["mem"]`)
+- Public crate default backend (`default = ["mem"]`)
 
 ## Status
 

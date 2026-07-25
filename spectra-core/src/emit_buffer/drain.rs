@@ -1,4 +1,4 @@
-//! Replay buffered records through the facade.
+//! Replay buffered records through the public crate.
 
 use std::time::Instant;
 
@@ -8,9 +8,9 @@ use super::push::borrow;
 use super::state::{aggregate_enabled, EMIT_TS, REPLAYING};
 use super::types::BufferedEmit;
 
-/// Replay buffered records through the facade, stamping each with its captured emit
+/// Replay buffered records through the public crate, stamping each with its captured emit
 /// timestamp. Safe to call while a scope is still bound: the replay guard makes the
-/// facade dispatch (not re-buffer) during the loop.
+/// public-crate dispatch (not re-buffer) during the loop.
 pub fn drain(records: Vec<BufferedEmit>) {
     if records.is_empty() {
         return;

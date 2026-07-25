@@ -73,7 +73,7 @@ impl SpectraEvent {
 /// **Publisher side:** build from a schema `*Payload` (or these constructors) and
 /// publish on your bus. **Consumer side:** deserialize, then record via
 /// [`crate::MetricsStorageBackend`] or `try_record_counter_now` /
-/// `try_log_event_now` on the `spectra` facade.
+/// `try_log_event_now` on the `spectra` crate.
 ///
 /// The constructors preserve an explicit emit timestamp and set only the value field associated
 /// with the selected [`MetricKind`]. Direct in-process counters normally use typed recorders

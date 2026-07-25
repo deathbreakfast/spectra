@@ -1,7 +1,7 @@
 //! Shared remote storage logic for ClickHouse-protocol Spectra backends.
 //!
 //! **Internal** — used by `spectra-backend-clickhouse` and `spectra-backend-tensorbase`;
-//! not re-exported from the public `spectra` facade.
+//! not re-exported from the public `spectra` crate.
 //!
 //! # Stack position
 //!
@@ -20,7 +20,7 @@
 //! - `query_aggregate` is not yet implemented (returns empty series).
 //! - Label filtering on metric range queries happens client-side after fetch.
 //!
-//! See also: the `spectra` facade crate documentation map (`cargo doc -p uf-spectra --open`).
+//! See also: the `spectra` crate crate documentation map (`cargo doc -p uf-spectra --open`).
 
 mod client;
 mod events;

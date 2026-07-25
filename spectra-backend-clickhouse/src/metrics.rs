@@ -17,7 +17,7 @@ use spectra_core::{
 ///
 /// # Examples
 ///
-/// Facade wiring through `Spectra::builder()` (requires the `spectra` crate with the
+/// Public crate wiring through `Spectra::builder()` (requires the `spectra` crate with the
 /// `clickhouse` feature):
 ///
 /// ```ignore

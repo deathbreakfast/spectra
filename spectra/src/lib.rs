@@ -440,7 +440,7 @@
 //!   [`Spectra::builder()`], not a global mode enum.
 //! - Event chart aggregates (`spectra_core::EventStorageBackend::query_aggregate`) are stubbed on most backends.
 //! - Schema modules must be `mod`-linked into the binary or `inventory` will not see them.
-//! - Schema macros and helpers call through the `spectra` facade — pin `spectra` as a direct
+//! - Schema macros and helpers call through the `spectra` crate — pin `spectra` as a direct
 //!   dependency (no separate `spectra-core` pin required for the default recipe).
 
 // Allow schema macros to resolve `::spectra::…` inside this crate.

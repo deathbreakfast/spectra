@@ -16,7 +16,7 @@ thread_local! {
     /// (non-buffered) path so they fall back to `Utc::now()`.
     pub(super) static EMIT_TS: Cell<Option<DateTime<Utc>>> = const { Cell::new(None) };
 
-    /// Set while [`super::drain::drain`] replays records so the facade dispatches replayed emits
+    /// Set while [`super::drain::drain`] replays records so the public crate dispatches replayed emits
     /// instead of re-buffering them (a drain may run while the scope is still bound).
     pub(super) static REPLAYING: Cell<bool> = const { Cell::new(false) };
 }

@@ -27,7 +27,7 @@ use spectra_core::{
 ///
 /// # Examples
 ///
-/// Facade wiring through `Spectra::builder()` (requires the `spectra` crate):
+/// Public crate wiring through `Spectra::builder()` (requires the `spectra` crate):
 ///
 /// ```ignore
 /// use std::sync::Arc;
@@ -160,7 +160,7 @@ impl MetricsStorageBackend for MemMetricsBackend {
 ///
 /// # Examples
 ///
-/// Facade wiring through `Spectra::builder()` (requires the `spectra` crate):
+/// Public crate wiring through `Spectra::builder()` (requires the `spectra` crate):
 ///
 /// ```ignore
 /// use std::sync::Arc;

@@ -3,7 +3,7 @@ name = "spectra-backend-mem"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "In-memory metrics and events backend (facade default)"
+description = "In-memory metrics and events backend (public crate default)"
 repository.workspace = true
 readme = "README.md"
 

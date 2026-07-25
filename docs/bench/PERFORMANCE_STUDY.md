@@ -172,8 +172,8 @@ Measured cells only (no empty placeholders).
 
 ```mermaid
 flowchart LR
-  App[App emit] --> Facade[Spectra facade]
-  Facade --> PersistQ[StoragePersistSink]
+  App[App emit] --> Public crate[Spectra public crate]
+  Public crate --> PersistQ[StoragePersistSink]
   PersistQ --> Batch[Batch flush]
   Batch --> Router[SpectraRouter]
   Router --> Adapter[Storage backend]
@@ -181,7 +181,7 @@ flowchart LR
   Query[query_metrics / query_rows] --> Router
 ```
 
-Canonical durable path: `*_now` → L2 batch → DW. BM-SW0 bypasses facade for adapter-direct comparison.
+Canonical durable path: `*_now` → L2 batch → DW. BM-SW0 bypasses the public crate for adapter-direct comparison.
 
 ---
 

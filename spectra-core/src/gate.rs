@@ -319,7 +319,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn facade_runs_with_gate_installed() {
+    async fn entry_runs_with_gate_installed() {
         with_gate(SpectraConfig::default(), || async {
             let sink = RecordingSink::new();
             set_sink(Arc::new(sink.clone()));
