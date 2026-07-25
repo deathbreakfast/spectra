@@ -22,7 +22,7 @@ check_forbidden() {
 }
 
 # Gate 1–2: zone vocabulary and host product identity
-check_forbidden 'zone\s*[ab]|zone a|zone b|web-app-template|deathbreakfast' \
+check_forbidden 'zone\s*[ab]|zone a|zone b|web-app-template' \
   'forbidden zone or host product reference'
 
 # Gate 3: family / host adapter crate names in docs

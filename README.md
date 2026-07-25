@@ -73,7 +73,7 @@ The crates.io package is **`uf-spectra`** (`spectra` is taken). With `[lib] name
 [dependencies]
 spectra = { package = "uf-spectra", version = "0.1.0", features = ["mem"] }
 # or: cargo add uf-spectra --features mem
-# git pin: spectra = { package = "uf-spectra", git = "https://github.com/unified-field-dev/spectra.git", tag = "v0.1.0", features = ["mem"] }
+# git pin: spectra = { package = "uf-spectra", git = "https://github.com/deathbreakfast/spectra.git", tag = "v0.1.0", features = ["mem"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 

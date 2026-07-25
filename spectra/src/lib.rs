@@ -284,7 +284,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! spectra = { package = "uf-spectra", git = "https://github.com/unified-field-dev/spectra.git", tag = "v0.1.0", features = ["mem"] }
+//! spectra = { package = "uf-spectra", git = "https://github.com/deathbreakfast/spectra.git", tag = "v0.1.0", features = ["mem"] }
 //! chrono = { version = "0.4", features = ["serde"] }
 //! serde = { version = "1", features = ["derive"] }
 //! serde_json = "1"
