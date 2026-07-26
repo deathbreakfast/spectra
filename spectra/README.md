@@ -53,6 +53,7 @@ Loaded by `SpectraConfig::from_env()` unless `.config(...)` overrides.
 | `SPECTRA_SAMPLE_RATE` | `1.0` | Global sample floor after level check |
 | `SPECTRA_SAMPLE_<NAME>` | — | Per metric/event name override (`0.0`–`1.0`) |
 | `SPECTRA_CONFIG` | — | Path to TOML file with a `[spectra]` table |
+| `SPECTRA_ALLOW_INSECURE_REMOTE` | unset | Opt-in for plaintext `http://` / `tcp://` remote URLs (dev/CI only). Prefer `https://` / `tcp+tls://`. |
 
 Event query paging is clamped in-library (`MAX_EVENT_QUERY_LIMIT` = 1000). Metric/table/field identifiers must match `validate_spectra_ident`. See repository [`SECURITY.md`](../SECURITY.md).
 
@@ -114,6 +115,7 @@ Use `.telemetry_ndjson(dir)` on the builder to write `{dir}/metrics.ndjson` and 
 |----------|---------|
 | `SPECTRA_TENSORBASE_URL` | `tensorbase` feature — integration tests and adapters |
 | `SPECTRA_CLICKHOUSE_URL` | `clickhouse` feature — integration tests and adapters |
+| `SPECTRA_ALLOW_INSECURE_REMOTE` | Opt-in for plaintext `http://` / `tcp://` (dev/CI only; prefer `https://` / `tcp+tls://`) |
 
 ### Debug
 
@@ -209,6 +211,7 @@ cargo run -p uf-spectra --example quickstart_consume_forward --features mem
 **Production-shaped remote consumer** (host bus + ClickHouse) — wire your subscriber, then:
 
 ```bash
+export SPECTRA_ALLOW_INSECURE_REMOTE=1   # local plaintext only
 export SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123
 # Consumer binary: backends + .build() (persist on); subscribe on your bus
 # Publisher binary: .sink(bus).persist_disabled().build(); emit with typed helpers
@@ -222,6 +225,7 @@ Direct persist into ClickHouse. Requires a live ClickHouse (Docker Compose below
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d clickhouse
+export SPECTRA_ALLOW_INSECURE_REMOTE=1   # local plaintext only
 export SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123
 cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse
 ```

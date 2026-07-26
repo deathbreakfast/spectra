@@ -25,7 +25,8 @@ use spectra_core::{
 /// use spectra::{Spectra, TensorBaseEventsBackend, TensorBaseMetricsBackend};
 ///
 /// # async fn start() -> spectra::Result<()> {
-/// let url = "tcp://127.0.0.1:9528";
+/// let url = "tcp+tls://tensorbase.example:9440";
+/// // Local plaintext: SPECTRA_ALLOW_INSECURE_REMOTE=1 + tcp://127.0.0.1:9528
 /// let spectra = Spectra::builder()
 ///     .metrics_backend(Arc::new(TensorBaseMetricsBackend::connect(url).await?))
 ///     .events_backend(Arc::new(TensorBaseEventsBackend::connect(url).await?))
@@ -39,8 +40,8 @@ pub struct TensorBaseMetricsBackend(RemoteMetricsBackend);
 impl TensorBaseMetricsBackend {
     /// Connect with a full TensorBase protocol URL and ensure metrics tables exist.
     ///
-    /// Accepts `tcp://host:9528` (native) or an HTTP ClickHouse-compatible endpoint. The call
-    /// is async and executes DDL.
+    /// Accepts `tcp+tls://` / `https://` (or plaintext `tcp://` / `http://` with
+    /// `SPECTRA_ALLOW_INSECURE_REMOTE=1`). The call is async and executes DDL.
     ///
     /// # Examples
     ///
@@ -48,7 +49,7 @@ impl TensorBaseMetricsBackend {
     /// # async fn example() -> spectra_core::Result<()> {
     /// use spectra_backend_tensorbase::TensorBaseMetricsBackend;
     ///
-    /// let backend = TensorBaseMetricsBackend::connect("tcp://127.0.0.1:9528").await?;
+    /// let backend = TensorBaseMetricsBackend::connect("tcp+tls://127.0.0.1:9440").await?;
     /// # let _ = backend;
     /// # Ok(())
     /// # }
@@ -66,7 +67,8 @@ impl TensorBaseMetricsBackend {
 
     /// Connect using a host name and the default native port (`9528`).
     ///
-    /// Equivalent to [`connect`](Self::connect) with `tcp://{host}:9528`.
+    /// Equivalent to [`connect`](Self::connect) with `tcp://{host}:9528`
+    /// (requires `SPECTRA_ALLOW_INSECURE_REMOTE=1` for that plaintext scheme).
     ///
     /// # Examples
     ///

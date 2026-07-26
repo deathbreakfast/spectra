@@ -30,7 +30,7 @@ let _spectra = Spectra::builder()
     .events_backend(Arc::new(events))
     .build()?;
 
-// Or explicit URL (tcp://host:9528 or http://host:8123):
+// Or explicit URL (prefer tcp+tls:// / https://; plaintext needs SPECTRA_ALLOW_INSECURE_REMOTE=1):
 let url = std::env::var("SPECTRA_TENSORBASE_URL")?;
 let metrics = TensorBaseMetricsBackend::connect(&url).await?;
 let events = TensorBaseEventsBackend::connect(&url).await?;
@@ -45,13 +45,14 @@ let _spectra = Spectra::builder()
 ## Runnable
 
 ```bash
+export SPECTRA_ALLOW_INSECURE_REMOTE=1   # local plaintext only
 export SPECTRA_TENSORBASE_URL=tcp://127.0.0.1:9528
 cargo run -p uf-spectra --example quickstart_tensorbase_emit --features tensorbase
 ```
 
-See [`spectra/README.md` — How to run examples](../spectra/README.md#how-to-run-examples).
+See [`spectra/README.md` — How to run examples](../spectra/README.md#how-to-run-examples) and repository [`SECURITY.md`](../SECURITY.md).
 
-Integration tests: set `SPECTRA_TENSORBASE_URL` and run `cargo test -p spectra-backend-tensorbase -- --ignored`.
+Integration tests: set `SPECTRA_TENSORBASE_URL` (and `SPECTRA_ALLOW_INSECURE_REMOTE=1` for plaintext) and run `cargo test -p spectra-backend-tensorbase -- --ignored`.
 
 ## Status
 

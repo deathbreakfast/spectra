@@ -14,6 +14,7 @@
 //! - [`RemoteMetricsBackend::connect`] / [`RemoteEventsBackend::connect`] — parameterized backends
 //! - [`MetricInsertRow`] / [`EventInsertRow`] — row shapes for streaming inserts
 //! - [`redact_url_credentials`] — scrub connection secrets from error text
+//! - [`RemoteTransportSecurity`] — TLS-required remote URL policy (`SPECTRA_ALLOW_INSECURE_REMOTE`)
 //! - [`query_sql`] helpers — validated SQL fragments (`escape_str`, `scope_clause`, …)
 //!
 //! # Prerequisites and gotchas
@@ -22,6 +23,8 @@
 //! - Query builders validate metric/table/field identifiers and clamp event `limit`/`offset`
 //!   (`spectra_core::MAX_EVENT_QUERY_LIMIT`).
 //! - Storage errors pass through [`redact_url_credentials`] so URL userinfo is not echoed.
+//! - Remote connect rejects plaintext `http://` / `tcp://` unless
+//!   `SPECTRA_ALLOW_INSECURE_REMOTE=1` (prefer `https://` / `tcp+tls://`).
 //! - `query_aggregate` is not yet implemented (returns empty series).
 //! - Label filtering on metric range queries happens client-side after fetch.
 //!
@@ -32,6 +35,7 @@ mod events;
 mod mem_store;
 mod metrics;
 pub mod query_sql;
+mod remote_security;
 
 pub use client::{
     datetime_to_ch_ts, parse_rfc3339_ts, redact_url_credentials, EventInsertRow, MetricInsertRow,
@@ -39,3 +43,4 @@ pub use client::{
 };
 pub use events::RemoteEventsBackend;
 pub use metrics::RemoteMetricsBackend;
+pub use remote_security::{RemoteTransportSecurity, ALLOW_INSECURE_REMOTE_ENV};

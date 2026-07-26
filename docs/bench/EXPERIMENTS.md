@@ -79,6 +79,7 @@ Remote rows require `SPECTRA_TENSORBASE_URL` / `SPECTRA_CLICKHOUSE_URL` and **`-
 | Event enqueue hammer | BM-SW4 |
 | Query latency / depth / filters | BM-SQ0..SQ3 |
 | Query validation / paging clamp overhead (correctness + capacity note) | BM-SQ1, BM-SQ3 (re-measure after hardening; `MAX_EVENT_QUERY_LIMIT=1000`) |
+| Remote TLS connect gate (correctness-only) | Unit tests (`remote_security`); no BM-ID — scheme check is fail-closed, not a capacity path |
 | Smoke emit/persist regression | BM-S0..S3 |
 
 ---

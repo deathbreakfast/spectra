@@ -21,7 +21,7 @@ Remote ClickHouse storage adapter for Spectra metrics and events.
 use std::sync::Arc;
 use spectra::{ClickHouseEventsBackend, ClickHouseMetricsBackend, Spectra};
 
-let url = std::env::var("SPECTRA_CLICKHOUSE_URL")?; // e.g. http://localhost:8123
+let url = std::env::var("SPECTRA_CLICKHOUSE_URL")?; // prefer https://…; http:// needs SPECTRA_ALLOW_INSECURE_REMOTE=1
 let metrics = ClickHouseMetricsBackend::connect(&url).await?;
 let events = ClickHouseEventsBackend::connect(&url).await?;
 let _spectra = Spectra::builder()
@@ -34,13 +34,14 @@ let _spectra = Spectra::builder()
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d clickhouse
+export SPECTRA_ALLOW_INSECURE_REMOTE=1   # local plaintext only
 export SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123
 cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse
 ```
 
-See [`spectra/README.md` — How to run examples](../spectra/README.md#how-to-run-examples).
+See [`spectra/README.md` — How to run examples](../spectra/README.md#how-to-run-examples) and repository [`SECURITY.md`](../SECURITY.md).
 
-Integration tests: set `SPECTRA_CLICKHOUSE_URL` and run `cargo test -p spectra-backend-clickhouse -- --ignored`.
+Integration tests: set `SPECTRA_CLICKHOUSE_URL` (and `SPECTRA_ALLOW_INSECURE_REMOTE=1` for plaintext) and run `cargo test -p spectra-backend-clickhouse -- --ignored`.
 
 ## Status
 

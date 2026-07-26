@@ -25,6 +25,8 @@
 //!   [`validate_spectra_ident`]; invalid filter fields return [`Error::Config`] before SQL runs.
 //! - **Query paging clamps** — event queries clamp `limit`/`offset` to
 //!   [`MAX_EVENT_QUERY_LIMIT`] / [`MAX_EVENT_QUERY_OFFSET`].
+//! - **Remote TLS** — ClickHouse/TensorBase connect requires `https://` or `tcp+tls://` unless
+//!   `SPECTRA_ALLOW_INSECURE_REMOTE=1` (plaintext `http://` / `tcp://`, development/CI only).
 //! - **Field classification helpers** — [`mask_field_value`] for host/UI display of PII columns
 //!   (query authz remains a host/Gauge concern; see repository `SECURITY.md`).
 //! - **Diagnostics** — library crates emit structured `tracing` events; hosts initialize a
@@ -125,7 +127,8 @@
 //! use std::sync::Arc;
 //! use spectra::{ClickHouseEventsBackend, ClickHouseMetricsBackend, Spectra};
 //!
-//! let url = "http://127.0.0.1:8123"; // or SPECTRA_CLICKHOUSE_URL
+//! let url = "https://clickhouse.example:8443"; // or SPECTRA_CLICKHOUSE_URL
+//! // Local plaintext: SPECTRA_ALLOW_INSECURE_REMOTE=1 + http://127.0.0.1:8123
 //! let metrics = ClickHouseMetricsBackend::connect(url).await?;
 //! let events = ClickHouseEventsBackend::connect(url).await?;
 //! let spectra = Spectra::builder()
@@ -306,7 +309,7 @@
 //! cargo run -p uf-spectra --example quickstart_publish_only --features mem
 //! cargo run -p uf-spectra --example quickstart_consume_forward --features mem
 //! # docker compose -f docker-compose.dev.yml up -d clickhouse
-//! SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123 \
+//! SPECTRA_ALLOW_INSECURE_REMOTE=1 SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123 \
 //!   cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse
 //! ```
 //!

@@ -49,6 +49,29 @@ PR CI: embedded e2e + stub contracts only. Live remote catalog and capacity camp
 | `query-limit-clamped` | Sad | Huge `limit` still returns ≤ emitted / clamp ceiling |
 | `query-reject-bad-filter-field` | Sad | Invalid filter field → `Error::Config` |
 
+## Test Map (security hardening)
+
+| ID | Behavior | Primary tests | Notes |
+|----|----------|---------------|-------|
+| S-1 | Require TLS remote URLs | `connect_accepts_https_under_require_tls`; `require_tls_accepts_https` / `tcp_tls` | Happy `https://` / `tcp+tls://` |
+| S-1 | Plaintext without opt-in | `connect_rejects_http_under_require_tls`; `require_tls_rejects_*` | Sad `Error::Config` |
+| S-1 | Plaintext with opt-in | `connect_allows_http_when_insecure_allowed`; `insecure_allows_*` | Happy under `AllowInsecurePlaintext` / env |
+| S-2 | Ident validation | `validate::tests::*`; catalog `query-reject-bad-filter-field` | Happy+sad charset |
+| S-2 | Paging clamp | `validate::tests::clamp_honors_maxima`; catalog `query-limit-clamped` | Cap = `MAX_EVENT_QUERY_LIMIT` |
+| S-2 | Gate FORCE_OFF | `config` gate tests; catalog `gate-disabled-allows-debug` | Dual env fail-closed |
+| S-2 | URL redaction | `redact_tests::*` | HTTP + native stderr scrub |
+| S-2 | Emit-name validation | `entry` `reject_invalid_ident` (via emit path) | Invalid names dropped |
+
+## Documentation Map (hardening surface)
+
+| Topic | Landing | Mid | Deep |
+|-------|---------|-----|------|
+| Emit gate FORCE_OFF | `uf-spectra` Features + `spectra/README` env table | `SECURITY.md` | `SpectraConfig::from_env` |
+| Query ident / paging | `uf-spectra` Features | `SECURITY.md` | `validate_spectra_ident` / `clamp_event_paging` |
+| Remote TLS / insecure opt-in | `SECURITY.md` + `SPECTRA_ALLOW_INSECURE_REMOTE` | clickhouse/tensorbase README | `RemoteTransportSecurity` |
+| URL credential redaction | `SECURITY.md` | remote-common crate docs | `redact_url_credentials` |
+| Verification gates | this file + `CONTRIBUTING.md` | rustdoc Features | e2e / AWS scripts |
+
 ```bash
 cd infra/aws/spectra
 export AWS_KEY_NAME=your-key

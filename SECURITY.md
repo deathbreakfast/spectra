@@ -14,35 +14,18 @@ Include a clear description, impact assessment, and reproduction steps when poss
 
 We aim to acknowledge reports within a few business days.
 
-## Threat model (L0 library)
+## Operator hardening (L0)
 
-Spectra is an **in-process** observability library. It does **not** implement session authentication, Gauge permissions, or HTTP ACL. Hosts (Orbital / Lepton / Gauge) own query authorization.
+Spectra is an **in-process** observability library. It does **not** implement session authentication, Gauge permissions, or HTTP ACL. Hosts own query authorization and network exposure.
 
-| Trust assumption | Library behavior |
-|------------------|------------------|
-| Emit callers are in-process | Dynamic metric/table names are charset-validated; invalid names are dropped |
-| Query DTOs may be attacker-controlled once hosts expose them | Identifiers validated; event `limit`/`offset` clamped; SQL literals escaped / NUL rejected |
-| Connection URLs may contain secrets | Remote error mapping redacts URL userinfo |
-| Operators control env | `SPECTRA_GATE=0` requires `SPECTRA_GATE_FORCE_OFF=1` to disable the emit gate |
+| Area | Guidance |
+|------|----------|
+| Emit gate | `SPECTRA_GATE=0` is ignored unless `SPECTRA_GATE_FORCE_OFF=1` is also set (fail-closed). |
+| Query identifiers | Metric/table/field tokens must match `validate_spectra_ident` before SQL runs. |
+| Event paging | Event query `limit` / `offset` are clamped (`MAX_EVENT_QUERY_LIMIT` / `MAX_EVENT_QUERY_OFFSET`). |
+| Remote TLS | Prefer `https://` or `tcp+tls://`. Plaintext `http://` / `tcp://` require `SPECTRA_ALLOW_INSECURE_REMOTE=1` (dev/CI only; emits a warning). |
+| Connection secrets | Remote error mapping redacts URL userinfo; do not log raw credential URLs. |
+| PII display | Call `mask_field_value` before rendering fields classified as PII. |
+| Query authz | Enforce host policy (for example `spectra.query.{table}`) before calling query APIs. |
 
-Hosts should:
-
-- Enforce `spectra.query.{table}` (or equivalent) before calling query APIs.
-- Call [`mask_field_value`](spectra-core) before rendering fields classified as PII.
-- Prefer Neutrino (or equivalent) for ClickHouse credentials rather than logging raw URLs.
-- Keep ingest / readiness HTTP endpoints off the public internet (host/runtime concern).
-
-Discoverable API docs: `cargo doc -p uf-spectra --open` → **Features** (validation, paging clamps, gate, classification).
-
-## Supply-chain checks
-
-Maintainers run `cargo deny check` (see [`deny.toml`](deny.toml)) in CI. Optional local guidance:
-
-```bash
-cargo install cargo-deny --locked
-cargo deny check
-# optional complementary scan
-cargo audit
-```
-
-Infra bootstrap scripts verify SHA-256 digests for pinned TensorBase / rustup downloads; see [`infra/aws/checksums/SHA256SUMS`](infra/aws/checksums/SHA256SUMS).
+Discoverable API docs: `cargo doc -p uf-spectra --open` → **Features** (validation, paging clamps, gate, remote TLS, classification).

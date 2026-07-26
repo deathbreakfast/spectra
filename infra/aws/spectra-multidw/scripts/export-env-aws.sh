@@ -13,6 +13,9 @@ DW_N="${SPECTRA_BENCH_DW_N:-1}"
 DW_KIND="${SPECTRA_MULTIDW_DW_KIND:-clickhouse}"
 
 export SPECTRA_BENCH_DW_N="$DW_N"
+# Lab plaintext http:// / tcp:// to DW private IPs (never set in production).
+export SPECTRA_ALLOW_INSECURE_REMOTE="${SPECTRA_ALLOW_INSECURE_REMOTE:-1}"
+echo "SPECTRA_ALLOW_INSECURE_REMOTE=${SPECTRA_ALLOW_INSECURE_REMOTE}"
 
 for i in $(seq 0 $((DW_N - 1))); do
   var="DW_${i}_PRIVATE_IP"

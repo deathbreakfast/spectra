@@ -52,6 +52,7 @@ Fire-and-forget full-stack rates (BM-SW1 remote ~600k) are **enqueue**, not dura
 | RQ-Q1 | Query latency at empty / depth | BM-SQ0, BM-SQ1 (measured cells) |
 | RQ-Q2 | Label filter / event scan | BM-SQ2, BM-SQ3 |
 | RQ-Q3 | Post-hardening query validation / paging clamp overhead | Re-run BM-SQ1, BM-SQ3 on AWS; compare p50/p95 to prior `*-aws-t3-xlarge.json`. `MAX_EVENT_QUERY_LIMIT=1000` is a correctness bound (not a new BM-ID). Measurement deferred until next co-located campaign. |
+| RQ-S1 | Remote TLS connect gate (`SPECTRA_ALLOW_INSECURE_REMOTE`) | Correctness-only waiver: unit tests in `remote_security`; connect-path microbench not measured (fail-closed scheme check is O(1) string prefix). |
 | RQ-P1 | Smoke emit / persist / query | BM-S0..S3 |
 
 ---

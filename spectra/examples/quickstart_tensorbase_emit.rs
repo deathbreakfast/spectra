@@ -1,6 +1,7 @@
 //! TensorBase remote storage: connect, emit smoke counter + event, query roundtrip.
 //!
 //! ```bash
+//! export SPECTRA_ALLOW_INSECURE_REMOTE=1   # local plaintext only
 //! export SPECTRA_TENSORBASE_URL=tcp://127.0.0.1:9528
 //! cargo run -p uf-spectra --example quickstart_tensorbase_emit --features tensorbase
 //! ```
@@ -16,7 +17,10 @@ use spectra_core::{
 #[tokio::main]
 async fn main() -> spectra::Result<()> {
     let url = std::env::var("SPECTRA_TENSORBASE_URL").unwrap_or_else(|_| {
-        eprintln!("Set SPECTRA_TENSORBASE_URL (e.g. tcp://127.0.0.1:9528)");
+        eprintln!(
+            "Set SPECTRA_TENSORBASE_URL (e.g. tcp+tls://… or tcp://127.0.0.1:9528 with \
+             SPECTRA_ALLOW_INSECURE_REMOTE=1)"
+        );
         std::process::exit(1);
     });
 

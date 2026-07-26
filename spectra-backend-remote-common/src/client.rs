@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use clickhouse::Client as HttpClient;
 use spectra_core::{Error, Result};
 
+use crate::remote_security::{RemoteTransportSecurity, RemoteUrlKind};
+
 /// Redact `userinfo` (credentials) from URLs embedded in error or log text.
 ///
 /// Replaces `scheme://user:pass@host` with `scheme://***@host`. Non-URL strings are
@@ -81,6 +83,8 @@ struct NativeEndpoint {
     host: String,
     port: u16,
     cli: PathBuf,
+    /// When true, pass `--secure` to `clickhouse-client` (native TLS).
+    secure: bool,
 }
 
 /// Streaming insert handle (HTTP RowBinary or native SQL insert).
@@ -98,19 +102,39 @@ enum InsertInner<T> {
 }
 
 impl RemoteClient {
-    /// Connect to a remote engine (`http://` / `https://` or `tcp://host:port`).
+    /// Connect to a remote engine (`https://` / `http://`, or `tcp+tls://` / `tcp://`).
+    ///
+    /// Plaintext schemes (`http://`, `tcp://`) require [`RemoteTransportSecurity::AllowInsecurePlaintext`]
+    /// via `SPECTRA_ALLOW_INSECURE_REMOTE=1`. Prefer `https://` or `tcp+tls://` in production.
     pub async fn connect(url: &str) -> Result<Self> {
-        if let Some(addr) = url.strip_prefix("tcp://") {
-            let (host, port) = parse_host_port(addr)?;
-            let cli = resolve_clickhouse_client()?;
-            Ok(Self {
-                inner: ClientInner::Native(NativeEndpoint { host, port, cli }),
-            })
-        } else {
-            let client = HttpClient::default().with_url(url);
-            Ok(Self {
-                inner: ClientInner::Http(client),
-            })
+        Self::connect_with_security(url, RemoteTransportSecurity::from_env()).await
+    }
+
+    /// Connect with an explicit [`RemoteTransportSecurity`] policy (tests and custom hosts).
+    pub async fn connect_with_security(
+        url: &str,
+        security: RemoteTransportSecurity,
+    ) -> Result<Self> {
+        security.check_url(url)?;
+        match RemoteUrlKind::parse(url)? {
+            (RemoteUrlKind::Native { secure }, addr) => {
+                let (host, port) = parse_host_port(addr)?;
+                let cli = resolve_clickhouse_client()?;
+                Ok(Self {
+                    inner: ClientInner::Native(NativeEndpoint {
+                        host,
+                        port,
+                        cli,
+                        secure,
+                    }),
+                })
+            }
+            (RemoteUrlKind::Http, http_url) => {
+                let client = HttpClient::default().with_url(http_url);
+                Ok(Self {
+                    inner: ClientInner::Http(client),
+                })
+            }
         }
     }
 
@@ -345,12 +369,22 @@ fn parse_host_port(addr: &str) -> Result<(String, u16)> {
         (
             host.to_string(),
             port.parse::<u16>()
-                .map_err(|e| Error::config(format!("invalid tcp:// port in remote URL: {e}")))?,
+                .map_err(|e| Error::config(format!("invalid native port in remote URL: {e}")))?,
         )
     } else {
         (addr.to_string(), 9528)
     };
     Ok((host, port))
+}
+
+fn native_command(endpoint: &NativeEndpoint) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new(&endpoint.cli);
+    cmd.arg("--host").arg(&endpoint.host);
+    cmd.arg("--port").arg(endpoint.port.to_string());
+    if endpoint.secure {
+        cmd.arg("--secure");
+    }
+    cmd
 }
 
 fn sql_quote(s: &str) -> String {
@@ -414,7 +448,8 @@ fn resolve_clickhouse_client() -> Result<PathBuf> {
         return Ok(path);
     }
     Err(Error::config(
-        "tcp:// URLs require clickhouse-client (set SPECTRA_CLICKHOUSE_CLIENT_PATH or install in PATH)",
+        "native tcp:// / tcp+tls:// URLs require clickhouse-client \
+         (set SPECTRA_CLICKHOUSE_CLIENT_PATH or install in PATH)",
     ))
 }
 
@@ -431,11 +466,7 @@ fn which_client(name: &str) -> Result<PathBuf> {
 }
 
 async fn run_native_execute(endpoint: &NativeEndpoint, sql: &str) -> Result<()> {
-    let output = tokio::process::Command::new(&endpoint.cli)
-        .arg("--host")
-        .arg(&endpoint.host)
-        .arg("--port")
-        .arg(endpoint.port.to_string())
+    let output = native_command(endpoint)
         .arg("--query")
         .arg(sql)
         .output()
@@ -444,18 +475,14 @@ async fn run_native_execute(endpoint: &NativeEndpoint, sql: &str) -> Result<()> 
     if !output.status.success() {
         return Err(Error::storage(format!(
             "clickhouse-client execute failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+            redact_url_credentials(&String::from_utf8_lossy(&output.stderr))
         )));
     }
     Ok(())
 }
 
 async fn run_native_select(endpoint: &NativeEndpoint, sql: &str) -> Result<Vec<Vec<String>>> {
-    let output = tokio::process::Command::new(&endpoint.cli)
-        .arg("--host")
-        .arg(&endpoint.host)
-        .arg("--port")
-        .arg(endpoint.port.to_string())
+    let output = native_command(endpoint)
         .arg("--query")
         .arg(sql)
         .output()
@@ -464,7 +491,7 @@ async fn run_native_select(endpoint: &NativeEndpoint, sql: &str) -> Result<Vec<V
     if !output.status.success() {
         return Err(Error::storage(format!(
             "clickhouse-client query failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+            redact_url_credentials(&String::from_utf8_lossy(&output.stderr))
         )));
     }
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -500,5 +527,47 @@ mod redact_tests {
         );
         assert!(!out.contains("hunter2"));
         assert!(out.contains("***@db.example"));
+    }
+}
+
+#[cfg(test)]
+mod connect_security_tests {
+    use super::RemoteClient;
+    use crate::remote_security::{RemoteTransportSecurity, ALLOW_INSECURE_REMOTE_ENV};
+
+    #[tokio::test]
+    async fn connect_accepts_https_under_require_tls() {
+        // HTTPS is TLS-oriented; client construction does not dial until execute/query.
+        RemoteClient::connect_with_security(
+            "https://clickhouse.example:8443",
+            RemoteTransportSecurity::RequireTls,
+        )
+        .await
+        .expect("https connect constructs client");
+    }
+
+    #[tokio::test]
+    async fn connect_rejects_http_under_require_tls() {
+        let result = RemoteClient::connect_with_security(
+            "http://127.0.0.1:8123",
+            RemoteTransportSecurity::RequireTls,
+        )
+        .await;
+        let err = match result {
+            Ok(_) => panic!("plaintext rejected"),
+            Err(e) => e,
+        };
+        assert!(err.to_string().contains("plaintext"));
+        assert!(err.to_string().contains(ALLOW_INSECURE_REMOTE_ENV));
+    }
+
+    #[tokio::test]
+    async fn connect_allows_http_when_insecure_allowed() {
+        RemoteClient::connect_with_security(
+            "http://127.0.0.1:8123",
+            RemoteTransportSecurity::AllowInsecurePlaintext,
+        )
+        .await
+        .expect("http allowed with AllowInsecurePlaintext");
     }
 }

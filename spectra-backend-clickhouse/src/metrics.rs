@@ -25,7 +25,8 @@ use spectra_core::{
 /// use spectra::{ClickHouseEventsBackend, ClickHouseMetricsBackend, Spectra};
 ///
 /// # async fn start() -> spectra::Result<()> {
-/// let url = "http://127.0.0.1:8123";
+/// let url = "https://clickhouse.example:8443";
+/// // Local plaintext: SPECTRA_ALLOW_INSECURE_REMOTE=1 + http://127.0.0.1:8123
 /// let spectra = Spectra::builder()
 ///     .metrics_backend(Arc::new(ClickHouseMetricsBackend::connect(url).await?))
 ///     .events_backend(Arc::new(ClickHouseEventsBackend::connect(url).await?))
@@ -39,7 +40,8 @@ pub struct ClickHouseMetricsBackend(RemoteMetricsBackend);
 impl ClickHouseMetricsBackend {
     /// Connect to ClickHouse over HTTP or native protocol and ensure metrics tables exist.
     ///
-    /// `url` is typically `http://host:8123`. The call is async and executes DDL, so the
+    /// `url` is typically `https://host:8443` (or `http://host:8123` with
+    /// `SPECTRA_ALLOW_INSECURE_REMOTE=1`). The call is async and executes DDL, so the
     /// ClickHouse credentials need table-creation permission.
     ///
     /// # Examples
@@ -48,7 +50,7 @@ impl ClickHouseMetricsBackend {
     /// # async fn example() -> spectra_core::Result<()> {
     /// use spectra_backend_clickhouse::ClickHouseMetricsBackend;
     ///
-    /// let backend = ClickHouseMetricsBackend::connect("http://127.0.0.1:8123").await?;
+    /// let backend = ClickHouseMetricsBackend::connect("https://clickhouse.example:8443").await?;
     /// # let _ = backend;
     /// # Ok(())
     /// # }

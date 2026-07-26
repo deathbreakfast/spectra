@@ -1,6 +1,7 @@
 //! ClickHouse remote storage: connect, emit smoke counter + event, query roundtrip.
 //!
 //! ```bash
+//! export SPECTRA_ALLOW_INSECURE_REMOTE=1   # local plaintext only
 //! export SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123
 //! cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse
 //! ```
@@ -16,7 +17,10 @@ use spectra_core::{
 #[tokio::main]
 async fn main() -> spectra::Result<()> {
     let url = std::env::var("SPECTRA_CLICKHOUSE_URL").unwrap_or_else(|_| {
-        eprintln!("Set SPECTRA_CLICKHOUSE_URL (e.g. http://127.0.0.1:8123)");
+        eprintln!(
+            "Set SPECTRA_CLICKHOUSE_URL (e.g. https://… or http://127.0.0.1:8123 with \
+             SPECTRA_ALLOW_INSECURE_REMOTE=1)"
+        );
         std::process::exit(1);
     });
 

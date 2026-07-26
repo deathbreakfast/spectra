@@ -63,7 +63,7 @@ flowchart TD
 
 Your application owns identity, routing, and business logic. Spectra owns observability semantics: classification metadata, emit buffering, registry discovery, and query DTOs. Storage engines live in feature-gated `spectra-backend-*` crates.
 
-**Security / hardening:** query identifier validation, event paging clamps, emit-gate force-off, URL credential redaction, and PII mask helpers — see [`SECURITY.md`](SECURITY.md) and `cargo doc -p uf-spectra --open` → Features.
+**Security / hardening:** query identifier validation, event paging clamps, emit-gate force-off, remote TLS (`SPECTRA_ALLOW_INSECURE_REMOTE` for plaintext lab URLs), URL credential redaction, and PII mask helpers — see [`SECURITY.md`](SECURITY.md) and `cargo doc -p uf-spectra --open` → Features.
 
 **Topology vocabulary:** **embedded** (in-process store) vs **remote** (network-backed store). Assembly uses builder methods — not a global deployment mode enum.
 
@@ -125,6 +125,7 @@ cargo run -p uf-spectra --example quickstart_consume_forward --features mem
 
 # 3. Remote ClickHouse (Docker Compose)
 docker compose -f docker-compose.dev.yml up -d clickhouse
+export SPECTRA_ALLOW_INSECURE_REMOTE=1   # local plaintext only
 export SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123
 cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse
 ```
