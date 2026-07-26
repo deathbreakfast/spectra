@@ -39,8 +39,8 @@ pub fn event_topic(spec: &EventSchemaSpec) -> TokenStream {
         #[doc = #payload_doc]
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
         pub struct #payload_name {
-            /// Logical event table name.
-            pub table: &'static str,
+            /// Logical event table name (schema identity; not a user field).
+            pub schema_table: &'static str,
             #(#field_defs,)*
             /// Optional explicit emit timestamp.
             #[serde(default, skip_serializing_if = "Option::is_none")]
