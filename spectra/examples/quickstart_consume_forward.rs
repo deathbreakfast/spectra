@@ -12,6 +12,8 @@
 //! cargo run -p uf-spectra --example quickstart_consume_forward --features mem
 //! ```
 
+#![allow(clippy::print_stderr)]
+
 use std::sync::Arc;
 
 use chrono::{TimeZone, Utc};

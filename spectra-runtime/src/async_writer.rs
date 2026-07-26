@@ -5,7 +5,7 @@ use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 
 use serde_json::Value;
-use spectra_core::{NdjsonFileSink, SchemaRegistry, SpectraSink};
+use spectra_core::{NdjsonFileSink, Result, SchemaRegistry, SpectraSink};
 
 const CHANNEL_CAPACITY: usize = 65_536;
 
@@ -59,22 +59,21 @@ pub struct OffThreadSpectraSink {
 
 impl OffThreadSpectraSink {
     /// Spawn the background writer thread and wire the shared emit queue.
-    pub fn new(ndjson: NdjsonFileSink) -> Self {
+    ///
+    /// Returns [`spectra_core::Error::Io`] when the OS cannot spawn the writer thread.
+    pub fn new(ndjson: NdjsonFileSink) -> Result<Self> {
         let ndjson = Arc::new(ndjson);
         let (tx, rx) = mpsc::sync_channel(CHANNEL_CAPACITY);
         let ndjson_for_thread = Arc::clone(&ndjson);
-        // Process invariant: failing to spawn the writer thread is unrecoverable at boot.
-        #[allow(clippy::expect_used)]
         let writer = thread::Builder::new()
             .name("spectra-async-writer".into())
-            .spawn(move || writer_loop(rx, ndjson_for_thread))
-            .expect("spawn spectra-async-writer");
+            .spawn(move || writer_loop(rx, ndjson_for_thread))?;
         let _ = WRITER_TX.set(tx.clone());
-        Self {
+        Ok(Self {
             ndjson,
             tx,
             _writer: Arc::new(writer),
-        }
+        })
     }
 
     /// Underlying NDJSON file sink (used by the worker thread).
@@ -120,7 +119,7 @@ impl SpectraSink for OffThreadSpectraSink {
         if !off_thread_emit_enabled() {
             if console_mirror_enabled() {
                 if let Some(line) = format_console_line(table, fields) {
-                    eprintln!("{line}");
+                    mirror_console_line(&line);
                 }
             }
             self.ndjson.log_event(table, fields);
@@ -174,7 +173,7 @@ fn writer_loop(rx: mpsc::Receiver<EmitJob>, ndjson: Arc<NdjsonFileSink>) {
             EmitJob::Event { table, fields } => {
                 if console_mirror_enabled() {
                     if let Some(line) = format_console_line(&table, &fields) {
-                        eprintln!("{line}");
+                        mirror_console_line(&line);
                     }
                 }
                 ndjson.log_event(&table, &fields);
@@ -187,6 +186,12 @@ fn writer_loop(rx: mpsc::Receiver<EmitJob>, ndjson: Arc<NdjsonFileSink>) {
 pub fn format_console_line(table: &str, fields: &Value) -> Option<String> {
     let parts = mirror_safe_console_parts(table, fields)?;
     Some(format!("[spectra:console] {table} {}", parts.join(" ")))
+}
+
+/// Intentional stderr console mirror (`SPECTRA_CONSOLE`); not unstructured library logging.
+#[allow(clippy::print_stderr)]
+fn mirror_console_line(line: &str) {
+    eprintln!("{line}");
 }
 
 fn mirror_safe_console_parts(table: &str, fields: &Value) -> Option<Vec<String>> {

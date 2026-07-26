@@ -15,6 +15,7 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 serde_json = "1"
 spectra-core = { workspace = true }
 tokio = { version = "1", features = ["rt"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

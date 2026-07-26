@@ -231,7 +231,7 @@ impl SpectraBuilder {
     pub fn telemetry_ndjson(mut self, dir: impl AsRef<Path>) -> spectra_core::Result<Self> {
         let dir = dir.as_ref();
         let ndjson = NdjsonFileSink::new(dir.join("metrics.ndjson"), dir.join("events.ndjson"))?;
-        let sink = Arc::new(OffThreadSpectraSink::new(ndjson));
+        let sink = Arc::new(OffThreadSpectraSink::new(ndjson)?);
         self.transport_sink = Some(sink);
         Ok(self)
     }

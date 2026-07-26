@@ -37,11 +37,17 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 /// match error {
 ///     Error::Config(message) => assert!(message.contains("backend")),
-///     Error::Io(_) | Error::Json(_) | Error::Storage { .. } | Error::Internal(_) => {
+///     Error::Io(_)
+///     | Error::Json(_)
+///     | Error::Storage { .. }
+///     | Error::Internal(_)
+///     | Error::PersistQueueClosed
+///     | _ => {
 ///         unreachable!()
 ///     }
 /// }
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Error)]
 pub enum Error {
     /// Underlying filesystem or stream I/O failure.
@@ -65,6 +71,9 @@ pub enum Error {
     /// Catch-all for invariant violations and unexpected parse bugs.
     #[error("{0}")]
     Internal(String),
+    /// Persist worker channel closed before a flush or enqueue ack completed.
+    #[error("persist queue closed")]
+    PersistQueueClosed,
 }
 
 impl Error {

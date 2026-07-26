@@ -90,6 +90,7 @@ unwrap_used = "warn"
 expect_used = "warn"
 dbg_macro = "warn"
 print_stdout = "warn"
+print_stderr = "warn"
 redundant_clone = "warn"
 
 [workspace.lints.rustdoc]

@@ -6,6 +6,8 @@
 //! cargo run -p uf-spectra --example quickstart_clickhouse_emit --features clickhouse
 //! ```
 
+#![allow(clippy::print_stderr)]
+
 use std::sync::Arc;
 
 use spectra::helpers::{PlatformSmokeCounterRecorder, PlatformSmokeEventLogger};

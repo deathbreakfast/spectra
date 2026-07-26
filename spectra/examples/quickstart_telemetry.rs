@@ -4,6 +4,8 @@
 //! cargo run -p uf-spectra --example quickstart_telemetry --features mem,telemetry-console
 //! ```
 
+#![allow(clippy::print_stderr)]
+
 use std::sync::Arc;
 
 use spectra::{MemEventsBackend, MemMetricsBackend, Spectra};

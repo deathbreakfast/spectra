@@ -4,6 +4,8 @@
 //! cargo run -p uf-spectra --example quickstart --features mem
 //! ```
 
+#![allow(clippy::print_stderr)]
+
 use spectra::{MemEventsBackend, MemMetricsBackend, Spectra};
 
 #[tokio::main]

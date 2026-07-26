@@ -4,6 +4,8 @@
 //! cargo run -p uf-spectra --example quickstart_schema_emit --features mem
 //! ```
 
+#![allow(clippy::print_stderr)]
+
 use std::sync::Arc;
 
 use spectra::helpers::{PlatformSmokeCounterRecorder, PlatformSmokeEventLogger};

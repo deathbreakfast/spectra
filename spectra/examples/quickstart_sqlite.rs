@@ -4,6 +4,8 @@
 //! cargo run -p uf-spectra --example quickstart_sqlite --features sqlite
 //! ```
 
+#![allow(clippy::print_stderr)]
+
 use std::sync::Arc;
 
 use spectra::{Spectra, SqliteEventsBackend, SqliteMetricsBackend};

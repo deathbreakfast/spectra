@@ -6,6 +6,8 @@
 //! cargo run -p uf-spectra --example quickstart_tensorbase_emit --features tensorbase
 //! ```
 
+#![allow(clippy::print_stderr)]
+
 use std::sync::Arc;
 
 use spectra::helpers::{PlatformSmokeCounterRecorder, PlatformSmokeEventLogger};

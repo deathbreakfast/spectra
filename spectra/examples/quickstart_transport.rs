@@ -8,6 +8,8 @@
 //! cargo run -p uf-spectra --example quickstart_transport --features mem
 //! ```
 
+#![allow(clippy::print_stderr)]
+
 use std::sync::Arc;
 
 use spectra::{MemEventsBackend, MemMetricsBackend, RecordingSink, Spectra, SpectraSink};

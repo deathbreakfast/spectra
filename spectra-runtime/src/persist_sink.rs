@@ -12,6 +12,7 @@ use spectra_core::{
     EventWriteRow, MetricWriteRow, SpectraRouter, SpectraSink,
 };
 use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 
 use crate::persist_config::{PersistConfig, PersistOverflow};
 
@@ -50,10 +51,10 @@ impl PersistHandle {
         self.tx
             .send(PersistJob::Flush(ack_tx))
             .await
-            .map_err(|_| spectra_core::Error::internal("persist queue closed during flush"))?;
+            .map_err(|_| spectra_core::Error::PersistQueueClosed)?;
         ack_rx
             .await
-            .map_err(|_| spectra_core::Error::internal("persist flush ack dropped"))
+            .map_err(|_| spectra_core::Error::PersistQueueClosed)
     }
 }
 
@@ -71,6 +72,9 @@ pub struct StoragePersistSink {
     tx: mpsc::Sender<PersistJob>,
     handle: PersistHandle,
     overflow: PersistOverflow,
+    /// Retained so the persist worker is owned by the sink (not a detached spawn).
+    /// Dropping the handle detaches the task; the worker exits when all senders close.
+    _worker: JoinHandle<()>,
 }
 
 impl StoragePersistSink {
@@ -97,73 +101,27 @@ impl StoragePersistSink {
     ) -> Self {
         let config = config.normalized();
         let overflow = config.overflow;
-        let (tx, mut rx) = mpsc::channel(config.queue_max);
+        let (tx, rx) = mpsc::channel(config.queue_max);
         let handle = PersistHandle { tx: tx.clone() };
         let router_worker = Arc::clone(&router);
         let batch_max = config.batch_max;
         let batch_wait = config.batch_wait;
         let batch_enabled = config.batch_enabled;
 
-        tokio::spawn(async move {
-            while let Some(first) = rx.recv().await {
-                if let PersistJob::Flush(ack) = first {
-                    let _ = ack.send(());
-                    continue;
-                }
-
-                let mut batch = vec![first];
-                let mut pending_flush: Option<oneshot::Sender<()>> = None;
-
-                while batch.len() < batch_max {
-                    match rx.try_recv() {
-                        Ok(PersistJob::Flush(ack)) => {
-                            pending_flush = Some(ack);
-                            break;
-                        }
-                        Ok(job) => batch.push(job),
-                        Err(mpsc::error::TryRecvError::Empty) => {
-                            if batch.len() == 1 && batch_enabled {
-                                tokio::time::sleep(batch_wait).await;
-                                match rx.try_recv() {
-                                    Ok(PersistJob::Flush(ack)) => {
-                                        pending_flush = Some(ack);
-                                    }
-                                    Ok(job) => {
-                                        batch.push(job);
-                                        continue;
-                                    }
-                                    Err(_) => {}
-                                }
-                            }
-                            break;
-                        }
-                        Err(mpsc::error::TryRecvError::Disconnected) => break,
-                    }
-                }
-
-                if batch_enabled {
-                    if let Err(e) = flush_batch(&router_worker, batch).await {
-                        tracing::warn!(error = %e, "persist batch flush failed");
-                    }
-                } else {
-                    for job in batch {
-                        if let Err(e) = run_job(&router_worker, job).await {
-                            tracing::warn!(error = %e, "persist job failed");
-                        }
-                    }
-                }
-
-                if let Some(ack) = pending_flush {
-                    let _ = ack.send(());
-                }
-            }
-        });
+        let worker = tokio::spawn(persist_worker_loop(
+            rx,
+            router_worker,
+            batch_max,
+            batch_wait,
+            batch_enabled,
+        ));
 
         Self {
             inner,
             tx,
             handle,
             overflow,
+            _worker: worker,
         }
     }
 
@@ -286,6 +244,69 @@ fn enqueue(tx: &mpsc::Sender<PersistJob>, job: PersistJob, overflow: PersistOver
     }
 }
 
+#[tracing::instrument(name = "spectra.persist.worker", skip_all)]
+async fn persist_worker_loop(
+    mut rx: mpsc::Receiver<PersistJob>,
+    router: Arc<SpectraRouter>,
+    batch_max: usize,
+    batch_wait: std::time::Duration,
+    batch_enabled: bool,
+) {
+    while let Some(first) = rx.recv().await {
+        if let PersistJob::Flush(ack) = first {
+            let _ = ack.send(());
+            continue;
+        }
+
+        let mut batch = vec![first];
+        let mut pending_flush: Option<oneshot::Sender<()>> = None;
+
+        while batch.len() < batch_max {
+            match rx.try_recv() {
+                Ok(PersistJob::Flush(ack)) => {
+                    pending_flush = Some(ack);
+                    break;
+                }
+                Ok(job) => batch.push(job),
+                Err(mpsc::error::TryRecvError::Empty) => {
+                    if batch.len() == 1 && batch_enabled {
+                        tokio::time::sleep(batch_wait).await;
+                        match rx.try_recv() {
+                            Ok(PersistJob::Flush(ack)) => {
+                                pending_flush = Some(ack);
+                            }
+                            Ok(job) => {
+                                batch.push(job);
+                                continue;
+                            }
+                            Err(_) => {}
+                        }
+                    }
+                    break;
+                }
+                Err(mpsc::error::TryRecvError::Disconnected) => break,
+            }
+        }
+
+        if batch_enabled {
+            if let Err(e) = flush_batch(&router, batch).await {
+                tracing::warn!(error = %e, "persist batch flush failed");
+            }
+        } else {
+            for job in batch {
+                if let Err(e) = run_job(&router, job).await {
+                    tracing::warn!(error = %e, "persist job failed");
+                }
+            }
+        }
+
+        if let Some(ack) = pending_flush {
+            let _ = ack.send(());
+        }
+    }
+}
+
+#[tracing::instrument(name = "spectra.persist.run_job", skip_all)]
 async fn run_job(router: &SpectraRouter, job: PersistJob) -> spectra_core::Result<()> {
     match job {
         PersistJob::Flush(_) => Ok(()),
@@ -329,6 +350,7 @@ async fn run_job(router: &SpectraRouter, job: PersistJob) -> spectra_core::Resul
     }
 }
 
+#[tracing::instrument(name = "spectra.persist.flush_batch", skip_all, fields(batch_len = batch.len()))]
 async fn flush_batch(router: &SpectraRouter, batch: Vec<PersistJob>) -> spectra_core::Result<()> {
     fn arc_key<T: ?Sized>(arc: &Arc<T>) -> usize {
         Arc::as_ptr(arc) as *const () as usize

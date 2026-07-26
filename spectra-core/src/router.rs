@@ -161,10 +161,15 @@ impl SpectraRouter {
 
     /// Returns the process-global router (panics if not installed).
     ///
-    /// Prefer [`Self::try_global`] in library code; use this in hosts/examples that have
-    /// already called [`Self::set_global`].
+    /// **Do not call from library code.** Prefer [`Self::try_global`], or hold an
+    /// [`Arc`] from [`Self::set_global`] / `Spectra::router()`. This panicking accessor is
+    /// reserved for hosts and examples after a successful install.
+    ///
+    /// # Panics
+    ///
+    /// Panics if [`Self::set_global`] was not called.
     pub fn global() -> Arc<Self> {
-        // Process invariant: hosts must install before calling.
+        // Host/example convenience after install — libraries must use `try_global`.
         #[allow(clippy::expect_used)]
         GLOBAL_ROUTER
             .get()
@@ -172,7 +177,7 @@ impl SpectraRouter {
             .expect("SpectraRouter::set_global was not called")
     }
 
-    /// Returns the process-global router if installed.
+    /// Returns the process-global router if installed (panic-free; prefer in libraries).
     pub fn try_global() -> Option<Arc<Self>> {
         GLOBAL_ROUTER.get().cloned()
     }

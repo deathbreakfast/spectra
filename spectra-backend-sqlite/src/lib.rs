@@ -172,6 +172,11 @@ impl MetricsStorageBackend for SqliteMetricsBackend {
         StorageEngineType::Sqlite
     }
 
+    #[tracing::instrument(
+        name = "spectra.sqlite.record_counter",
+        skip(self, labels),
+        fields(metric = %name)
+    )]
     async fn record_counter(
         &self,
         name: &str,
@@ -196,6 +201,11 @@ impl MetricsStorageBackend for SqliteMetricsBackend {
         .map_err(map_join)?
     }
 
+    #[tracing::instrument(
+        name = "spectra.sqlite.record_gauge",
+        skip(self, labels),
+        fields(metric = %name)
+    )]
     async fn record_gauge(
         &self,
         name: &str,
@@ -220,6 +230,7 @@ impl MetricsStorageBackend for SqliteMetricsBackend {
         .map_err(map_join)?
     }
 
+    #[tracing::instrument(name = "spectra.sqlite.query_range", skip(self, query), fields(metric = %query.metric_name))]
     async fn query_range(&self, query: MetricsQueryRange) -> Result<Vec<MetricPoint>> {
         let conn = Arc::clone(&self.conn);
         let name = query.metric_name.clone();
@@ -352,6 +363,11 @@ impl EventStorageBackend for SqliteEventsBackend {
         StorageEngineType::Sqlite
     }
 
+    #[tracing::instrument(
+        name = "spectra.sqlite.append_row",
+        skip(self, fields),
+        fields(table = %table)
+    )]
     async fn append_row(
         &self,
         table: &str,
@@ -377,6 +393,7 @@ impl EventStorageBackend for SqliteEventsBackend {
         .map_err(map_join)?
     }
 
+    #[tracing::instrument(name = "spectra.sqlite.query_rows", skip(self, filter), fields(table = %filter.table))]
     async fn query_rows(&self, filter: EventsQueryFilter) -> Result<Vec<EventRow>> {
         let conn = Arc::clone(&self.conn);
         let table = filter.table.clone();

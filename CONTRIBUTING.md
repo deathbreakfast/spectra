@@ -56,12 +56,12 @@ Full remote gate (EC2): [`infra/aws/spectra/README.md`](infra/aws/spectra/README
 ## Lint policy
 
 - Clippy: `all` + `pedantic` + `nursery`, with `-D warnings` in CI.
-- Restriction lints: `unwrap_used`, `expect_used`, `dbg_macro`, `print_stdout` (tests exempt via [`clippy.toml`](clippy.toml)).
+- Restriction lints: `unwrap_used`, `expect_used`, `dbg_macro`, `print_stdout`, `print_stderr` (tests exempt via [`clippy.toml`](clippy.toml)).
 - Workspace allows stay limited to low-signal pedantic noise (casts, `must_use_candidate`, doc detail lints) — see root [`Cargo.toml`](Cargo.toml) `[workspace.lints.clippy]`.
-- Prefer fixing code over new `#[allow(clippy::…)]`; justified exceptions go in root `Cargo.toml` or `clippy.toml`.
+- Prefer [`SpectraRouter::try_global`](spectra-core/src/router.rs) in library code; panicking [`SpectraRouter::global`](spectra-core/src/router.rs) is for hosts/examples after install.
+- Prefer fixing code over new `#[allow(clippy::…)]`; justified exceptions go in root `Cargo.toml` or `clippy.toml`. Intentional console-mirror `eprintln!` in `spectra-runtime` carries a narrow `allow`.
 - Do **not** re-allow `await_holding_lock` or `future_not_send` without fixing the underlying issue.
 - Cast and doc-detail pedantic lints stay allowed until a dedicated audit/rustdoc pass; do not flip them without fixing call sites.
-- Prefer [`SpectraRouter::try_global`](spectra-core/src/router.rs) in library code; panicking [`SpectraRouter::global`](spectra-core/src/router.rs) is for hosts/examples after install.
 
 ## Documentation expectations
 

@@ -111,6 +111,7 @@ impl RemoteClient {
     }
 
     /// Connect with an explicit [`RemoteTransportSecurity`] policy (tests and custom hosts).
+    #[tracing::instrument(name = "spectra.remote.connect", skip_all)]
     pub async fn connect_with_security(
         url: &str,
         security: RemoteTransportSecurity,
@@ -139,6 +140,7 @@ impl RemoteClient {
     }
 
     /// Execute DDL or administrative SQL.
+    #[tracing::instrument(name = "spectra.remote.execute", skip_all, fields(sql_len = sql.len()))]
     pub async fn execute(&self, sql: &str) -> Result<()> {
         match &self.inner {
             ClientInner::Http(client) => client.query(sql).execute().await.map_err(map_remote),
@@ -147,6 +149,7 @@ impl RemoteClient {
     }
 
     /// Query three string columns (legacy helper for tests).
+    #[tracing::instrument(name = "spectra.remote.query_strings", skip_all, fields(sql_len = sql.len()))]
     pub async fn query_strings(&self, sql: &str) -> Result<Vec<(String, String, String)>> {
         match &self.inner {
             ClientInner::Http(client) => {
@@ -180,6 +183,7 @@ impl RemoteClient {
     }
 
     /// Fetch metric rows `(value, labels_json, ts)`.
+    #[tracing::instrument(name = "spectra.remote.query_metric_rows", skip_all, fields(sql_len = sql.len()))]
     pub async fn query_metric_rows(&self, sql: &str) -> Result<Vec<(f64, String, String)>> {
         match &self.inner {
             ClientInner::Http(client) => {
@@ -215,6 +219,7 @@ impl RemoteClient {
     }
 
     /// Fetch event rows `(fields_json, ts)`.
+    #[tracing::instrument(name = "spectra.remote.query_event_rows", skip_all, fields(sql_len = sql.len()))]
     pub async fn query_event_rows(&self, sql: &str) -> Result<Vec<(String, String)>> {
         match &self.inner {
             ClientInner::Http(client) => {
