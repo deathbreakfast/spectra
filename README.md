@@ -178,7 +178,8 @@ API details: [`spectra/README.md`](spectra/README.md) and `cargo doc -p uf-spect
 |-----|-----|
 | `cargo doc -p uf-spectra --all-features --open` | API reference, Getting started (direct / publish-consume / dual-path), examples |
 | [`spectra/README.md`](spectra/README.md) | Feature flags, configuration, [How to run examples](spectra/README.md#how-to-run-examples) |
-| [`spectra/examples/`](spectra/examples/) | Runnable flows (canonical path + other) |
+| [`spectra/examples/README.md`](spectra/examples/README.md) | Example ladder (when-to-use, commands, success signals) |
+| [`spectra/examples/`](spectra/examples/) | Runnable `.rs` sources |
 | [`docs/bench/EXPERIMENTS.md`](docs/bench/EXPERIMENTS.md) | Benchmark registry and CLI |
 | [`docs/bench/PERFORMANCE_STUDY.md`](docs/bench/PERFORMANCE_STUDY.md) | Performance study |
 | Per-crate READMEs | Crate-specific entry points |

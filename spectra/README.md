@@ -158,6 +158,8 @@ smoke `helpers` and `topics` from those expansions.
 
 ## How to run examples
 
+Navigational index: [`examples/README.md`](examples/README.md) (when-to-use ladder + links to each `.rs` file).
+
 Canonical teaching path (start here). Topology docs:
 [Direct persist](https://docs.rs/uf-spectra/latest/spectra/index.html#direct-persist-one-binary) /
 [Publish-consume](https://docs.rs/uf-spectra/latest/spectra/index.html#publish-consume-two-binaries) /
