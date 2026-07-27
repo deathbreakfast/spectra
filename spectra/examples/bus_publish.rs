@@ -21,9 +21,7 @@ use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Map, Value};
-use spectra::{
-    try_record_counter_now, MemEventsBackend, MemMetricsBackend, Spectra, SpectraSink,
-};
+use spectra::{try_record_counter_now, MemEventsBackend, MemMetricsBackend, Spectra, SpectraSink};
 use spectra_core::{SharedEventBackend, SharedMetricsBackend};
 
 /// Host-owned bus adapter: each emit becomes one JSON line on a TCP connection.
@@ -45,7 +43,9 @@ impl TcpJsonSink {
     }
 
     fn write_line(&self, value: Value) {
-        let mut guard = self.stream.lock().expect("bus sink lock");
+        let Ok(mut guard) = self.stream.lock() else {
+            return;
+        };
         let mut line = value.to_string();
         line.push('\n');
         let _ = guard.write_all(line.as_bytes());

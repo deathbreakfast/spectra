@@ -17,9 +17,7 @@ use spectra::helpers::PlatformSmokeEventLogger;
 use spectra::{
     mask_field_value, FieldClassification, MemEventsBackend, MemMetricsBackend, Spectra, PII_MASK,
 };
-use spectra_core::{
-    current_emit_ts, EventsQueryFilter, SharedEventBackend, SharedMetricsBackend,
-};
+use spectra_core::{current_emit_ts, EventsQueryFilter, SharedEventBackend, SharedMetricsBackend};
 
 #[tokio::main]
 async fn main() -> spectra::Result<()> {

@@ -69,9 +69,7 @@ async fn main() -> spectra::Result<()> {
     stream
         .set_nonblocking(false)
         .map_err(|e| spectra::Error::Config(format!("blocking stream: {e}")))?;
-    stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
-        .ok();
+    stream.set_read_timeout(Some(Duration::from_secs(2))).ok();
 
     let mut handled = 0usize;
     let reader = BufReader::new(stream);
@@ -116,7 +114,10 @@ fn handle_message(msg: &Value) -> spectra::Result<usize> {
             let name = msg["name"].as_str().unwrap_or("unknown");
             let delta = msg["delta"].as_i64().unwrap_or(1);
             let owned = owned_labels(&msg["labels"]);
-            let pairs: Vec<(&str, &str)> = owned.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+            let pairs: Vec<(&str, &str)> = owned
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
             try_record_counter_at(name, &pairs, delta, ts);
             Ok(1)
         }
@@ -124,7 +125,10 @@ fn handle_message(msg: &Value) -> spectra::Result<usize> {
             let name = msg["name"].as_str().unwrap_or("unknown");
             let value = msg["value"].as_f64().unwrap_or(0.0);
             let owned = owned_labels(&msg["labels"]);
-            let pairs: Vec<(&str, &str)> = owned.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+            let pairs: Vec<(&str, &str)> = owned
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
             try_record_gauge_at(name, &pairs, value, ts);
             Ok(1)
         }
