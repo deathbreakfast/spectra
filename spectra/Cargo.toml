@@ -30,12 +30,14 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time"] }
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing-subscriber = { workspace = true }
 trybuild = "1.0"
+async-trait = "0.1"
+parking_lot = { workspace = true }
 
 [features]
 default = ["mem"]
@@ -80,6 +82,26 @@ required-features = ["mem"]
 [[example]]
 name = "quickstart_telemetry"
 required-features = ["mem", "telemetry-console"]
+
+[[example]]
+name = "bus_publish"
+required-features = ["mem"]
+
+[[example]]
+name = "bus_consume"
+required-features = ["mem"]
+
+[[example]]
+name = "clickhouse_dual_path"
+required-features = ["clickhouse"]
+
+[[example]]
+name = "query_and_pii_console"
+required-features = ["mem"]
+
+[[example]]
+name = "custom_backend_stub"
+required-features = ["mem"]
 
 [lints]
 workspace = true

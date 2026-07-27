@@ -179,40 +179,40 @@ cargo run -p uf-spectra --example quickstart_schema_emit --features mem
 
 Success: stderr prints `schema emit OK: … metric point(s) persisted`.
 
-### 2. Publish-consume (conceptual set — run as sketches)
+### 2. Publish-consume (two binaries)
 
 Publisher and consumer are **separate binaries** in production. Spectra does **not** ship a
-message bus; your host owns that piece. The examples below are **standalone sketches**
-(`RecordingSink` / in-process envelope) so each command runs alone without a broker.
+message bus; your host owns that piece. The `bus_*` examples use a TCP JSON-lines adapter so
+you can run a real process boundary without Photon. Replace `TcpJsonSink` / the listener with
+your bus (Photon, NATS, …) in production.
 
 | Rule | Detail |
 |------|--------|
 | Shared schemas | Same `spectra_*!` modules (`mod`-linked) on publisher and consumer |
-| Start order (production) | Consumer + bus first, then one or more publishers |
-| Publishers | Each app process uses `.sink(...).persist_disabled()`; unique host instance IDs if you run a fleet |
-| Consumers | Own storage (persist on); decode `*Payload` → `try_record_*_at` / `try_log_event_at` |
-| Auth / bus | Host responsibility (Photon, NATS, Kafka, …) |
-
-**Local sketches** (no bus required):
+| Start order | Consumer first, then publisher |
+| Publishers | `.sink(...).persist_disabled()` |
+| Consumers | Own storage (persist on); decode → `try_record_*_at` / `try_log_event_at` |
 
 ```bash
-# Terminal A — publisher sketch (transport receives emit; storage empty)
-cargo run -p uf-spectra --example quickstart_publish_only --features mem
-
-# Terminal B — consumer sketch (decode envelope → persist; timestamp preserved)
-cargo run -p uf-spectra --example quickstart_consume_forward --features mem
+export SPECTRA_BUS_ADDR=127.0.0.1:9809
+# Terminal 1 — consumer
+cargo run -p uf-spectra --example bus_consume --features mem
+# Terminal 2 — publisher
+cargo run -p uf-spectra --example bus_publish --features mem
 ```
 
-**Production-shaped remote consumer** (host bus + ClickHouse) — wire your subscriber, then:
+Success: `bus-consume OK: … metric point(s) in storage`.
+
+**In-process sketches** (no TCP): `quickstart_publish_only`, `quickstart_consume_forward`.
+
+**ClickHouse dual-path** (sink + remote persist in one process):
 
 ```bash
-export SPECTRA_ALLOW_INSECURE_REMOTE=1   # local plaintext only
+docker compose -f docker-compose.dev.yml up -d clickhouse
+export SPECTRA_ALLOW_INSECURE_REMOTE=1
 export SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123
-# Consumer binary: backends + .build() (persist on); subscribe on your bus
-# Publisher binary: .sink(bus).persist_disabled().build(); emit with typed helpers
+cargo run -p uf-spectra --example clickhouse_dual_path --features clickhouse
 ```
-
-See rustdoc **Getting started → Publish-consume** for sink and consumer code sketches.
 
 ### 3. Remote storage — `quickstart_clickhouse_emit` (standalone)
 
@@ -234,8 +234,12 @@ Success: stderr prints `clickhouse emit OK: … metric point(s), … event row(s
 | `quickstart` | Direct persist | `mem` | Minimal boot + `tracing_subscriber` |
 | `quickstart_sqlite` | Direct persist | `sqlite` | Durable embedded wiring |
 | `quickstart_transport` | Dual-path | `mem` | Sink + persist in one process |
+| `clickhouse_dual_path` | Dual-path (remote) | `clickhouse` | RecordingSink + ClickHouse |
+| `query_and_pii_console` | Direct persist | `mem` | Query + `mask_field_value` |
+| `custom_backend_stub` | Direct persist | `mem` | Custom storage trait stub |
 | `quickstart_telemetry` | Direct persist | `mem,telemetry-console` | NDJSON under a temp dir |
 | `quickstart_tensorbase_emit` | Direct persist (remote) | `tensorbase` | Needs `SPECTRA_TENSORBASE_URL` |
+| `quickstart_publish_only` / `quickstart_consume_forward` | Publish-consume sketches | `mem` | No process boundary |
 
 ## Status
 
