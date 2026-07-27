@@ -1,13 +1,6 @@
 # spectra-backend-clickhouse
 
-Remote ClickHouse storage adapter for Spectra metrics and events.
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **Host integrators** | Network-backed analytics store for metrics and events |
-| **Adapter authors** | ClickHouse client boundary |
+Remote ClickHouse storage adapter for Spectra metrics and events. Enable via the `spectra` feature `clickhouse` for network-backed analytics storage; implements the ClickHouse client boundary for metrics and events.
 
 ## Role
 

@@ -1,13 +1,6 @@
 # spectra-testkit
 
-Shared matrix bootstrap, scenarios, and fixtures for Spectra verification.
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **Test authors** | `MatrixSpec`, `ScenarioSpec`, `ScenarioRunner` |
-| **Bench authors** | Same scenarios as `spectra-e2e` with timing capture |
+Shared matrix bootstrap, scenarios, and fixtures for Spectra verification. Use `MatrixSpec`, `ScenarioSpec`, and `ScenarioRunner` for matrix tests and the same timed bench scenarios as `spectra-e2e`.
 
 ## Role
 

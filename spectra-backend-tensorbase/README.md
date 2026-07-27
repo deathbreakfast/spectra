@@ -1,13 +1,6 @@
 # spectra-backend-tensorbase
 
-Scale-out TensorBase storage adapter (ClickHouse-compatible native protocol).
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **Host integrators** | Remote ingest and multi-node metric/event persistence |
-| **Adapter authors** | TensorBase wire protocol boundary |
+Scale-out TensorBase storage adapter (ClickHouse-compatible native protocol). Enable via the `spectra` feature `tensorbase` for remote ingest and multi-node metric/event persistence; implements the TensorBase wire protocol boundary.
 
 ## Role
 

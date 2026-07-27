@@ -1,13 +1,6 @@
 # spectra-backend-remote-common
 
-Shared remote storage logic for ClickHouse-protocol Spectra backends.
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **Adapter authors** | HTTP/native client wiring shared by `clickhouse` and `tensorbase` backends |
-| **Library maintainers** | Internal insert/query paths — not a public application dependency |
+Shared remote storage logic for ClickHouse-protocol Spectra backends. HTTP/native client wiring shared by the `clickhouse` and `tensorbase` backends — **not** a public application dependency; do not depend on this crate directly from apps.
 
 ## Role
 

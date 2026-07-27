@@ -1,13 +1,6 @@
 # spectra-macros
 
-Proc macros for typed Spectra schemas and metrics.
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **App developers** | `spectra_schema!` and `spectra_metric!` in application modules |
-| **Library maintainers** | Macro expansion and DSL syntax |
+Proc macros for typed Spectra schemas and metrics. Declare schemas with `spectra_schema!` and `spectra_metric!` in application modules; macro expansion and DSL syntax live here.
 
 ## Role
 

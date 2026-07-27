@@ -174,8 +174,8 @@ API details: [`spectra/README.md`](spectra/README.md) and `cargo doc -p uf-spect
 
 ## Documentation
 
-| Doc | Audience |
-|-----|----------|
+| Doc | For |
+|-----|-----|
 | `cargo doc -p uf-spectra --all-features --open` | API reference, Getting started (direct / publish-consume / dual-path), examples |
 | [`spectra/README.md`](spectra/README.md) | Feature flags, configuration, [How to run examples](spectra/README.md#how-to-run-examples) |
 | [`spectra/examples/`](spectra/examples/) | Runnable flows (canonical path + other) |

@@ -1,13 +1,6 @@
 # spectra-bench
 
-Performance CLI for Spectra matrix scenarios and capacity experiments.
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **Library maintainers** | Write/query capacity baselines, smoke regression |
-| **Adapter authors** | Adapter-direct vs full-stack comparison (BM-SW0 vs BM-SW1) |
+Performance CLI for Spectra matrix scenarios and capacity experiments. Run write/query capacity baselines and smoke regression; compare adapter-direct vs full-stack paths (BM-SW0 vs BM-SW1).
 
 ## Role
 

@@ -1,13 +1,6 @@
 # spectra-backend-sqlite
 
-Durable embedded SQLite backend for Spectra metrics and events.
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **Test authors** | Durable embedded storage in `spectra-e2e` and examples |
-| **Host integrators** | File-backed embedded store on a single host |
+Durable embedded SQLite backend for Spectra metrics and events. Use for file-backed embedded storage on a single host and in durable e2e/examples within this repository.
 
 ## Role
 

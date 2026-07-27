@@ -1,13 +1,6 @@
 # spectra-backend-mem
 
-In-memory metrics and events backend.
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **App developers** | Quick start via the `spectra` feature `mem` (default) |
-| **Test authors** | Fast, non-durable storage in unit tests |
+In-memory metrics and events backend. Enable via the `spectra` feature `mem` (default) for quick start; use for fast, non-durable storage in unit tests.
 
 ## Role
 

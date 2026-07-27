@@ -1,13 +1,6 @@
 # spectra (`uf-spectra`)
 
-Typed metrics, structured event logs, and pluggable storage for Rust services.
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **App developers** | Primary dependency; enable backend features explicitly |
-| **Integrators** | `Spectra::builder()` and prelude re-exports |
+Typed metrics, structured event logs, and pluggable storage for Rust services. Depend on this as the primary crate; enable backend features explicitly on your dependency. At boot wire `Spectra::builder()` and use the prelude re-exports.
 
 ## Role
 

@@ -1,13 +1,6 @@
 # spectra-runtime
 
-Runtime assembly: builder, composite sink, and process install.
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **Host integrators** | `SpectraBuilder`, `.persist()`, `.sink()`, `.embedded()`, `.telemetry_ndjson()` |
-| **Library maintainers** | Wiring storage backends into a running `Spectra` instance |
+Runtime assembly: builder, composite sink, and process install. At boot wire `SpectraBuilder`, `.persist()`, `.sink()`, `.embedded()`, and `.telemetry_ndjson()` to inject storage backends and assemble a running `Spectra` instance.
 
 ## Role
 

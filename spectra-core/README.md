@@ -1,14 +1,6 @@
 # spectra-core (`uf-spectra-core`)
 
-Storage traits, emit ports, router, registry, emit buffer, and query DTOs.
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **App developers** | Emit API surface re-exported by the `spectra` crate |
-| **Adapter authors** | `MetricsStorageBackend`, `EventStorageBackend`, `SpectraRouter` |
-| **Host integrators** | Wiring backends into `SpectraBuilder` |
+Storage traits, emit ports, router, registry, emit buffer, and query DTOs. Depend on the emit APIs re-exported by the `spectra` crate rather than this crate directly for application code. Implement `MetricsStorageBackend`, `EventStorageBackend`, and `SpectraRouter` for storage adapters; wire backends into `SpectraBuilder` at host boot.
 
 ## Role
 
