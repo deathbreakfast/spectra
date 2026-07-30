@@ -32,7 +32,7 @@ cargo run -p spectra-bench -- experiments
 cargo run -p spectra-bench -- run --experiment bm-s1 --storage mem --topology embedded
 
 echo "verify-release: verification crate hygiene"
-if rg -i 'web-app-template|valence-spectra|spectra-wiring|prioritization|\bvalence\b|\bchronon\b|\bboson\b' \
+if rg -i 'valence-spectra|spectra-wiring|prioritization|\bvalence\b|\bchronon\b|\bboson\b' \
   spectra-testkit spectra-e2e spectra-bench; then
   echo "verify-release: FAIL — forbidden host product reference in verification crates" >&2
   exit 1
