@@ -20,7 +20,7 @@ tracing = { workspace = true }
 [dev-dependencies]
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-spectra-testkit = { workspace = true }
+spectra-testkit = { path = "../spectra-testkit" }
 
 [lints]
 workspace = true
