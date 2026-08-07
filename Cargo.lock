@@ -1197,7 +1197,7 @@ dependencies = [
 
 [[package]]
 name = "spectra-backend-clickhouse"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1210,7 +1210,7 @@ dependencies = [
 
 [[package]]
 name = "spectra-backend-mem"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1223,7 +1223,7 @@ dependencies = [
 
 [[package]]
 name = "spectra-backend-remote-common"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1239,7 +1239,7 @@ dependencies = [
 
 [[package]]
 name = "spectra-backend-sqlite"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1255,7 +1255,7 @@ dependencies = [
 
 [[package]]
 name = "spectra-backend-tensorbase"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1268,7 +1268,7 @@ dependencies = [
 
 [[package]]
 name = "spectra-bench"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1283,7 +1283,7 @@ dependencies = [
 
 [[package]]
 name = "spectra-codegen"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "insta",
@@ -1295,7 +1295,7 @@ dependencies = [
 
 [[package]]
 name = "spectra-e2e"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde_json",
  "spectra-testkit",
@@ -1305,7 +1305,7 @@ dependencies = [
 
 [[package]]
 name = "spectra-macros"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1314,7 +1314,7 @@ dependencies = [
 
 [[package]]
 name = "spectra-runtime"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "serde_json",
@@ -1326,7 +1326,7 @@ dependencies = [
 
 [[package]]
 name = "spectra-testkit"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1677,16 +1677,16 @@ dependencies = [
 
 [[package]]
 name = "uf-quark"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89aa82cb0e3d6fd953b1c84e72edf8ee593795c2db068a64050aa1af34470ce7"
+checksum = "e29dd3adc47fb5c0b00ec8885fdf0a7b853a0075644f1dd87c04353dbfbc6e0f"
 dependencies = [
  "inventory",
 ]
 
 [[package]]
 name = "uf-spectra"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1707,7 +1707,7 @@ dependencies = [
 
 [[package]]
 name = "uf-spectra-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "chrono",
