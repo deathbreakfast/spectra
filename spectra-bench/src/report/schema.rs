@@ -22,10 +22,13 @@ pub struct SweepReport {
     pub bench_client_index: Option<u32>,
     /// Warehouse instance count (`SPECTRA_BENCH_DW_N`).
     pub dw_n: Option<u32>,
-    /// L2 batch_max for BM-SW7.
+    /// L2 batch_max for BM-SW7 / BM-SW8.
     pub batch_max: Option<usize>,
     /// Writer process count for ladder campaigns.
     pub writer_n: Option<u32>,
+    /// Target offered ops/s for BM-SW8.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub offered_rate: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,6 +91,21 @@ pub struct BenchReport {
     pub batch_max: Option<usize>,
     /// Writer process count for ladder campaigns (BM-SW7).
     pub writer_n: Option<u32>,
+    /// Target offered ops/s for BM-SW8.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offered_rate: Option<u64>,
+    /// True when the BM-SW8 cell passed every zero-loss gate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zero_loss: Option<bool>,
+    /// Sampled emit-to-query-visible p95 in milliseconds (BM-SW8).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub visibility_p95_ms: Option<f64>,
+    /// Persist queue drops for this cell (BM-SW8 top-level copy).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub persist_queue_drops: Option<u64>,
+    /// `durable_rate / offered_rate` for BM-SW8.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub durable_rate_ratio: Option<f64>,
     pub host_util: Option<Vec<HostUtilReport>>,
     pub query_metrics_ms: Option<LatencyStats>,
     pub query_events_ms: Option<LatencyStats>,
@@ -117,6 +135,7 @@ impl BenchReport {
                 dw_n: Some(sweep.dw_n),
                 batch_max: Some(sweep.batch_max),
                 writer_n: Some(sweep.writer_n),
+                offered_rate: sweep.offered_rate,
             },
             metric_kind: String::new(),
             prefill_count: None,
@@ -135,6 +154,11 @@ impl BenchReport {
             visibility_confirmed: None,
             batch_max: None,
             writer_n: None,
+            offered_rate: None,
+            zero_loss: None,
+            visibility_p95_ms: None,
+            persist_queue_drops: None,
+            durable_rate_ratio: None,
             host_util: None,
             query_metrics_ms: None,
             query_events_ms: None,
@@ -145,7 +169,7 @@ impl BenchReport {
     }
 
     pub fn to_json(&self) -> Value {
-        json!({
+        let mut value = json!({
             "experiment": self.experiment,
             "summary": self.summary,
             "matrix": self.matrix,
@@ -174,6 +198,30 @@ impl BenchReport {
             "label_filter": self.label_filter,
             "write": self.write,
             "rootcause": self.rootcause,
-        })
+        });
+        insert_opt_u64(&mut value, "offered_rate", self.offered_rate);
+        insert_opt_bool(&mut value, "zero_loss", self.zero_loss);
+        insert_opt_f64(&mut value, "visibility_p95_ms", self.visibility_p95_ms);
+        insert_opt_u64(&mut value, "persist_queue_drops", self.persist_queue_drops);
+        insert_opt_f64(&mut value, "durable_rate_ratio", self.durable_rate_ratio);
+        value
+    }
+}
+
+fn insert_opt_u64(value: &mut Value, key: &str, field: Option<u64>) {
+    if let Some(v) = field {
+        value[key] = json!(v);
+    }
+}
+
+fn insert_opt_f64(value: &mut Value, key: &str, field: Option<f64>) {
+    if let Some(v) = field {
+        value[key] = json!(v);
+    }
+}
+
+fn insert_opt_bool(value: &mut Value, key: &str, field: Option<bool>) {
+    if let Some(v) = field {
+        value[key] = json!(v);
     }
 }

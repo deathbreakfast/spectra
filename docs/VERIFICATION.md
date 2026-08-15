@@ -74,9 +74,17 @@ PR CI: embedded e2e + stub contracts only. Live remote catalog and capacity camp
 
 Co-located ClickHouse + TensorBase campaigns run on AWS EC2: provision, bootstrap, deploy-and-run e2e/bench, fetch reports into `profiling/spectra-bench/reports/`, tear down. Then fill scoreboards in [`docs/bench/PERFORMANCE.md`](bench/PERFORMANCE_STUDY.md) from the fetched JSON.
 
-### Multi-DW durable write (BM-SW7 primary)
+### Multi-DW durable write (BM-SW7 ceiling, BM-SW8 zero-loss)
 
-Separate writer + DW EC2s. Primary capacity experiment is **BM-SW7** (L2 batch). BM-SW5/SW6 are single-row protocol floor. Multi-DW campaigns run on AWS via the operator campaign.
+Separate writer + DW EC2s. **BM-SW7** is the L2 batch overload ceiling (unbounded firehose). **BM-SW8** is the paced zero-loss sweep (`PersistOverflow::Block`, `batch_max=2048`); opt in with `SPECTRA_MULTIDW_RUN_SW8=1`. BM-SW5/SW6 remain the single-row protocol floor.
+
+Local SW8 smoke (no ClickHouse):
+
+```bash
+cargo test -p spectra-bench -- zero_loss
+```
+
+Multi-DW campaigns run on AWS via the operator campaign.
 
 Scoreboard: [`docs/bench/PERFORMANCE.md`](bench/PERFORMANCE_STUDY.md).
 

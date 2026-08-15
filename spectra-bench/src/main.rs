@@ -43,6 +43,7 @@ async fn main() -> Result<()> {
             concurrency,
             bench_clients,
             batch_max,
+            offered_rate,
         } => {
             run::run_experiment(run::RunArgs {
                 experiment,
@@ -59,6 +60,8 @@ async fn main() -> Result<()> {
                     concurrency,
                     bench_clients,
                     batch_max,
+                    offered_rate,
+                    offered_rate_sweep: None,
                 },
                 report,
             })

@@ -14,6 +14,8 @@ use crate::cli::CliMatrix;
 use crate::experiments::{ExperimentMeta, ExperimentTrack};
 use crate::report::{BenchReport, HostUtilReport, RootcauseReport, WriteReport};
 use crate::sweep::SweepParams;
+mod zero_loss;
+
 use crate::workload::{
     count_event_rows, count_metric_points, prefill_events, prefill_metrics,
     run_adapter_counter_firehose, run_batched_durable_counter_firehose,
@@ -58,6 +60,9 @@ async fn run_write_experiment(
     matrix: &MatrixSpec,
     sweep: &SweepParams,
 ) -> Result<Vec<Value>> {
+    if id == "bm-sw8" {
+        return zero_loss::run_zero_loss_experiment(matrix, sweep).await;
+    }
     let slug_suffix = format!("bench-{}", sweep.bench_client_index);
     let installed = if id == "bm-sw7" {
         install_batched(matrix, &slug_suffix, sweep).await?

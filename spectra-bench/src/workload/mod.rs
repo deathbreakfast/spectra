@@ -2,6 +2,7 @@ mod durable;
 mod firehose;
 mod prefill;
 mod query_bench;
+pub(crate) mod zero_loss;
 
 pub use durable::{
     run_batched_durable_counter_firehose, run_durable_counter_firehose, run_durable_event_firehose,

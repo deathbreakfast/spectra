@@ -18,6 +18,10 @@ pub struct SweepParams {
     pub batch_max: usize,
     /// Writer process count for ladder campaigns (`SPECTRA_BENCH_WRITER_N`).
     pub writer_n: u32,
+    /// Single offered ops/s for BM-SW8 (`SPECTRA_BENCH_OFFERED_RATE` / `--offered-rate`).
+    pub offered_rate: Option<u64>,
+    /// Offered-rate ladder for BM-SW8 when `offered_rate` is unset.
+    pub offered_rate_sweep: Vec<u64>,
 }
 
 impl Default for SweepParams {
@@ -33,12 +37,19 @@ impl Default for SweepParams {
             dw_n: 1,
             batch_max: 32,
             writer_n: 1,
+            offered_rate: None,
+            offered_rate_sweep: default_offered_rate_sweep(),
         }
     }
 }
 
 pub fn default_prefill_sweep() -> Vec<u64> {
     vec![1_000, 10_000, 100_000, 1_000_000]
+}
+
+/// Default BM-SW8 offered-rate ladder (campaign knobs, not measured results).
+pub fn default_offered_rate_sweep() -> Vec<u64> {
+    vec![5_000, 10_000, 15_000, 20_000, 25_000]
 }
 
 /// Raw CLI sweep inputs before env fallback.
@@ -51,6 +62,8 @@ pub struct SweepCli {
     pub concurrency: Option<u32>,
     pub bench_clients: Option<u32>,
     pub batch_max: Option<usize>,
+    pub offered_rate: Option<u64>,
+    pub offered_rate_sweep: Option<String>,
 }
 
 impl SweepParams {
@@ -89,6 +102,15 @@ impl SweepParams {
         params.writer_n = env_u32("SPECTRA_BENCH_WRITER_N")
             .unwrap_or(params.bench_clients)
             .max(1);
+        params.offered_rate = cli
+            .offered_rate
+            .or_else(|| env_u64("SPECTRA_BENCH_OFFERED_RATE"))
+            .map(|r| r.max(1));
+        if let Some(raw) = &cli.offered_rate_sweep {
+            params.offered_rate_sweep = parse_u64_list(raw);
+        } else if let Ok(raw) = std::env::var("SPECTRA_BENCH_OFFERED_RATE_SWEEP") {
+            params.offered_rate_sweep = parse_u64_list(&raw);
+        }
         params
     }
 
@@ -98,6 +120,20 @@ impl SweepParams {
             vec![n]
         } else {
             self.prefill_sweep.clone()
+        }
+    }
+
+    /// Offered rates for BM-SW8: a single `--offered-rate` wins over the sweep ladder.
+    pub fn offered_rates(&self) -> Vec<u64> {
+        match self.offered_rate {
+            Some(rate) => vec![rate.max(1)],
+            None => {
+                if self.offered_rate_sweep.is_empty() {
+                    default_offered_rate_sweep()
+                } else {
+                    self.offered_rate_sweep.clone()
+                }
+            }
         }
     }
 }
@@ -118,4 +154,25 @@ pub fn parse_u64_list(raw: &str) -> Vec<u64> {
     raw.split(',')
         .filter_map(|s| s.trim().parse().ok())
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn offered_rate_cli_wins_over_sweep() {
+        let mut params = SweepParams::default();
+        params.offered_rate = Some(25_000);
+        params.offered_rate_sweep = vec![5_000, 10_000];
+        assert_eq!(params.offered_rates(), vec![25_000]);
+    }
+
+    #[test]
+    fn offered_rate_sweep_used_when_single_rate_unset() {
+        let mut params = SweepParams::default();
+        params.offered_rate = None;
+        params.offered_rate_sweep = vec![5_000, 10_000, 15_000];
+        assert_eq!(params.offered_rates(), vec![5_000, 10_000, 15_000]);
+    }
 }

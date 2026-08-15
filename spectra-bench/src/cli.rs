@@ -93,5 +93,10 @@ pub enum Command {
         bench_clients: Option<u32>,
         #[arg(long, help = "L2 PersistConfig.batch_max (BM-SW7; default 32)")]
         batch_max: Option<usize>,
+        #[arg(
+            long,
+            help = "Target emit rate for BM-SW8 (ops/s); runs a single cell instead of the sweep"
+        )]
+        offered_rate: Option<u64>,
     },
 }

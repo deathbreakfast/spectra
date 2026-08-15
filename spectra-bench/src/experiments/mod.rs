@@ -76,6 +76,12 @@ pub const REGISTRY: &[ExperimentMeta] = &[
         summary: "batched durable multi-DW counter (L2 PersistConfig / *_now + flush)",
         track: ExperimentTrack::Write,
     },
+    ExperimentMeta {
+        id: "bm-sw8",
+        summary:
+            "paced ClickHouse L2 durable write (Block overflow, zero-loss, sampled visibility)",
+        track: ExperimentTrack::Write,
+    },
     // Track B — query capacity
     ExperimentMeta {
         id: "bm-sq0",

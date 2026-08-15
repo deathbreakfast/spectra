@@ -1,7 +1,8 @@
 //! Durable Spectra→DW firehose (adapter-direct / subscriber-shaped).
 //!
 //! Each successful awaited backend write counts toward durable ops/s. Used by BM-SW5/SW6.
-//! BM-SW7 uses L2 `*_now` enqueue + [`Spectra::flush_persist`] instead.
+//! BM-SW7 uses L2 `*_now` enqueue + [`Spectra::flush_persist`] as an unbounded firehose.
+//! BM-SW8 paces offered rate with `PersistOverflow::Block` (see `workload::zero_loss`).
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;

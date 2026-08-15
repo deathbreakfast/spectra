@@ -6,6 +6,8 @@ Measured on AWS (`t3.xlarge` class and multi-DW layouts). Spectra is the analyti
 
 Durable batched write (BM-SW7, ClickHouse n=1, separate writer, C=64, 15s): single-writer **~38k** durable counter ops/s at `batch_max=2048`; two-writer aggregate **~48k**. The single-row protocol floor (BM-SW5) sits around **~0.8k** ops/s — that is why L2 batching exists, not a sizing path.
 
+BM-SW8 is the paced zero-loss companion to that ceiling. It offers a target rate with `PersistOverflow::Block` and `batch_max=2048`, then fails a cell on queue drops, adapter errors, visibility timeout, or durable rate below 98% of offered. Publish the highest passing offered rate from the AWS aggregate; do not treat SW7 firehose ops/s as a lossless sustained rate. SW8 has no campaign JSON in this tree yet, so this page does not quote an SW8 number.
+
 Co-located writer+DW hosts establish baseline ingest and query latency for a single cell. Multi-DW layouts (separate writer and warehouse hosts) are the decision-grade shape for durable write capacity under sustained load.
 
 ## Guidance

@@ -4,7 +4,8 @@ Performance CLI for Spectra matrix scenarios and capacity experiments. Run write
 
 ## Role
 
-- **Batched durable (primary):** BM-SW7 — L2 `PersistConfig` via `--batch-max`; `*_now` + `flush_persist`
+- **Zero-loss paced durable:** BM-SW8 — L2 `PersistOverflow::Block`, `batch_max=2048`, paced `--offered-rate`; highest passing zero-drop rate
+- **Batched durable ceiling:** BM-SW7 — L2 `PersistConfig` via `--batch-max`; unbounded `*_now` + `flush_persist`
 - **Protocol floor:** BM-SW5/SW6 — single-row durable Spectra→DW
 - **Enqueue write:** BM-SW0..SW4 — `achieved_*_ops_per_sec` (not durable on remote)
 - **Query:** BM-SQ0..SQ3 — `query_*_ms` percentiles
@@ -29,6 +30,10 @@ export SPECTRA_CLICKHOUSE_URL=http://127.0.0.1:8123
 cargo run -p spectra-bench --features clickhouse -- \
   run --experiment bm-sw7 --storage clickhouse --topology remote-ingest --batch-max 2048
 
+# BM-SW8: one offered rate (local). Campaigns omit this flag and sweep until the first failing cell.
+cargo run -p spectra-bench --release --features clickhouse -- \
+  run --experiment bm-sw8 --storage clickhouse --topology remote-ingest --offered-rate 25000
+
 export SPECTRA_TENSORBASE_URL=tcp://127.0.0.1:9528
 cargo run -p spectra-bench --features tensorbase -- \
   run --experiment bm-sq1 --storage tensorbase --topology remote-ingest
@@ -49,6 +54,8 @@ Decision-grade AWS campaigns (co-located and multi-DW / BM-SW7) run on EC2 via t
 | Client index | — | `SPECTRA_BENCH_CLIENT_INDEX` | 0 |
 | DW count | — | `SPECTRA_BENCH_DW_N` | 1 |
 | Batch max (SW7) | `--batch-max` | `SPECTRA_BENCH_BATCH_MAX` | capacity: 512 or 2048 |
+| Offered rate (SW8) | `--offered-rate` | `SPECTRA_BENCH_OFFERED_RATE` | single cell; omit to sweep |
+| Offered sweep (SW8) | — | `SPECTRA_BENCH_OFFERED_RATE_SWEEP` | `5000,10000,15000,20000,25000`; stop at first fail |
 | Hardware label | — | `SPECTRA_BENCH_HARDWARE` | stamp `aws-t3-xlarge` on AWS |
 
 ## Report schema
@@ -64,6 +71,8 @@ Decision-grade AWS campaigns (co-located and multi-DW / BM-SW7) run on EC2 via t
   "visibility_confirmed": true
 }
 ```
+
+BM-SW8 cells add `offered_rate`, `zero_loss`, `visibility_p95_ms`, `persist_queue_drops`, and `durable_rate_ratio` when present. A cell fails on any queue drop, adapter error, visibility timeout, or durable rate below 98% of offered rate. The campaign aggregate publishes `highest_passing_offered_rate`.
 
 ## Status
 
