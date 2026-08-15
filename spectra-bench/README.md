@@ -34,6 +34,10 @@ cargo run -p spectra-bench --features clickhouse -- \
 cargo run -p spectra-bench --release --features clickhouse -- \
   run --experiment bm-sw8 --storage clickhouse --topology remote-ingest --offered-rate 25000
 
+# BM-SW8 embedded SQLite (same experiment; campaign cell uses this storage)
+cargo run -p spectra-bench --release --features sqlite -- \
+  run --experiment bm-sw8 --storage sqlite --topology embedded --offered-rate 80
+
 export SPECTRA_TENSORBASE_URL=tcp://127.0.0.1:9528
 cargo run -p spectra-bench --features tensorbase -- \
   run --experiment bm-sq1 --storage tensorbase --topology remote-ingest

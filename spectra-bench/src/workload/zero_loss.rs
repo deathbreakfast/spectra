@@ -585,4 +585,35 @@ mod tests {
         assert!(cell.zero_loss, "fail_reason={:?}", cell.fail_reason);
         assert!(cell.durable_rate_ratio >= DURABLE_RATE_RATIO_MIN);
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn sqlite_smoke_paced_block_zero_drops() {
+        let _g = TEST_LOCK.lock().await;
+        std::env::set_var("COUNTER_ROOTCAUSE", "1");
+        let matrix = MatrixSpec {
+            storage: StorageAdapter::Sqlite,
+            topology: Topology::Embedded,
+            persist_enabled: true,
+            ..MatrixSpec::default()
+        };
+        let persist = PersistConfig {
+            overflow: PersistOverflow::Block,
+            batch_max: ZERO_LOSS_BATCH_MAX,
+            batch_enabled: true,
+            ..PersistConfig::default()
+        };
+        let installed = install_bench_matrix_with_persist(matrix, "sw8-sqlite", Some(persist))
+            .await
+            .expect("install");
+        let cell =
+            run_paced_zero_loss_counter(&installed, 80, 2, Duration::from_millis(400), 2_000)
+                .await
+                .expect("paced cell");
+        assert_eq!(cell.offered_rate, 80);
+        assert_eq!(cell.persist_queue_drops, 0);
+        assert_eq!(cell.adapter_errors, 0);
+        assert!(cell.visibility_confirmed);
+        assert!(cell.zero_loss, "fail_reason={:?}", cell.fail_reason);
+        assert!(cell.durable_rate_ratio >= DURABLE_RATE_RATIO_MIN);
+    }
 }

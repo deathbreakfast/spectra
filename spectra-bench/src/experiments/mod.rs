@@ -79,7 +79,7 @@ pub const REGISTRY: &[ExperimentMeta] = &[
     ExperimentMeta {
         id: "bm-sw8",
         summary:
-            "paced ClickHouse L2 durable write (Block overflow, zero-loss, sampled visibility)",
+            "paced durable write (Block overflow, zero-loss, sampled visibility; sqlite or ClickHouse)",
         track: ExperimentTrack::Write,
     },
     // Track B — query capacity
