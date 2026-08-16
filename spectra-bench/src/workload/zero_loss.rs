@@ -339,7 +339,7 @@ async fn confirm_sampled_visibility(
     }
     let mut samples_ms = Vec::with_capacity(emit_times.len());
     for (idx, emit_at) in emit_times.iter().enumerate() {
-        let Some(emit_at) = *emit_at else {
+        let Some(_emit_at) = *emit_at else {
             return Ok((false, visibility_p95_ms(&samples_ms), true));
         };
         let matchers = [
@@ -356,6 +356,7 @@ async fn confirm_sampled_visibility(
                 value: idx.to_string(),
             },
         ];
+        let poll_started = Instant::now();
         match wait_until_metric_visible(
             installed,
             ZERO_LOSS_COUNTER_NAME,
@@ -366,7 +367,7 @@ async fn confirm_sampled_visibility(
         .await
         {
             Ok(()) => {
-                let elapsed_ms = emit_at.elapsed().as_secs_f64() * 1000.0;
+                let elapsed_ms = poll_started.elapsed().as_secs_f64() * 1000.0;
                 if visibility_sample_timed_out(elapsed_ms, timeout_ms) {
                     return Ok((false, visibility_p95_ms(&samples_ms), true));
                 }
@@ -509,6 +510,69 @@ mod tests {
             Some(10_000)
         );
         assert_eq!(highest_passing_offered_rate(&[(5_000, false)]), None);
+    }
+
+    #[test]
+    fn visibility_budget_is_poll_elapsed_not_emit_age() {
+        assert!(visibility_sample_timed_out(40_000.0, 15_000));
+        assert!(!visibility_sample_timed_out(12.0, 15_000));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn paced_window_does_not_consume_visibility_budget() {
+        let _g = TEST_LOCK.lock().await;
+        std::env::set_var("COUNTER_ROOTCAUSE", "1");
+        let matrix = MatrixSpec {
+            storage: StorageAdapter::Mem,
+            topology: Topology::Embedded,
+            persist_enabled: true,
+            ..MatrixSpec::default()
+        };
+        let persist = PersistConfig {
+            overflow: PersistOverflow::Block,
+            batch_max: ZERO_LOSS_BATCH_MAX,
+            batch_enabled: true,
+            ..PersistConfig::default()
+        };
+        let installed = install_bench_matrix_with_persist(matrix, "sw8-vis-window", Some(persist))
+            .await
+            .expect("install");
+        let cell = run_paced_zero_loss_counter(&installed, 80, 2, Duration::from_secs(3), 2_000)
+            .await
+            .expect("paced cell");
+        assert_eq!(cell.persist_queue_drops, 0);
+        assert!(
+            cell.visibility_confirmed,
+            "pace+flush must not spend the visibility timeout; fail={:?}",
+            cell.fail_reason
+        );
+        assert!(cell.zero_loss, "fail_reason={:?}", cell.fail_reason);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn visibility_timeout_still_fails_when_metric_never_appears() {
+        let _g = TEST_LOCK.lock().await;
+        let matrix = MatrixSpec {
+            storage: StorageAdapter::Mem,
+            topology: Topology::Embedded,
+            persist_enabled: true,
+            ..MatrixSpec::default()
+        };
+        let persist = PersistConfig {
+            overflow: PersistOverflow::Block,
+            batch_max: ZERO_LOSS_BATCH_MAX,
+            batch_enabled: true,
+            ..PersistConfig::default()
+        };
+        let installed = install_bench_matrix_with_persist(matrix, "sw8-vis-miss", Some(persist))
+            .await
+            .expect("install");
+        let (confirmed, _, timed_out) =
+            confirm_sampled_visibility(&installed, "missing-cell", &[Some(Instant::now())], 50)
+                .await
+                .expect("confirm");
+        assert!(!confirmed);
+        assert!(timed_out);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
