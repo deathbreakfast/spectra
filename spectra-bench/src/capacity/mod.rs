@@ -439,10 +439,16 @@ fn persist_drain_ms(topology: Topology) -> u64 {
     }
 }
 
-fn visibility_timeout_ms(topology: Topology) -> u64 {
+/// Post-flush visibility budget by topology.
+///
+/// Remote ClickHouse under multi-writer SW8 regularly shows multi-second p95
+/// (AWS evidence: ~6–14s at N=2). A 15s remote budget false-failed entire N=4
+/// samples at the first offered rate; keep embedded tight and remote wide enough
+/// for real DW lag without relaxing zero-loss, durable-rate, or drop gates.
+pub(crate) fn visibility_timeout_ms(topology: Topology) -> u64 {
     match topology {
         Topology::Embedded => 2_000,
-        Topology::RemoteIngest => 15_000,
+        Topology::RemoteIngest => 60_000,
     }
 }
 
@@ -476,4 +482,21 @@ pub fn write_report(path: &Path, body: &str) -> Result<()> {
     }
     fs::write(path, body).context("write report file")?;
     Ok(())
+}
+
+#[cfg(test)]
+mod visibility_timeout_tests {
+    use super::visibility_timeout_ms;
+    use spectra_testkit::Topology;
+
+    #[test]
+    fn remote_visibility_budget_exceeds_embedded_and_covers_multiwriter_ch_lag() {
+        let embedded = visibility_timeout_ms(Topology::Embedded);
+        let remote = visibility_timeout_ms(Topology::RemoteIngest);
+        assert!(embedded < remote, "embedded={embedded} remote={remote}");
+        assert!(
+            remote >= 60_000,
+            "remote budget must cover multi-writer ClickHouse p95 observed on AWS; got {remote}"
+        );
+    }
 }

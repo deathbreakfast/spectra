@@ -482,13 +482,15 @@ mod tests {
             }
             spectra.flush_persist().await.expect("flush");
 
+            let start = chrono::Utc::now() - chrono::Duration::hours(1);
+            let end = chrono::Utc::now() + chrono::Duration::hours(1);
             for i in 0..8 {
                 let points = spectra
                     .router()
                     .query_metrics(spectra_core::MetricsQueryRange {
                         metric_name: format!("cfg_batch_{i}"),
-                        start: chrono::Utc::now() - chrono::Duration::seconds(5),
-                        end: chrono::Utc::now() + chrono::Duration::seconds(1),
+                        start,
+                        end,
                         label_matchers: vec![],
                     })
                     .await
