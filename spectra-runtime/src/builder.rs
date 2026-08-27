@@ -310,7 +310,7 @@ fn build_router(metrics: SharedMetricsBackend, events: SharedEventBackend) -> Sp
 mod tests {
     use super::*;
     use spectra_backend_mem::{MemEventsBackend, MemMetricsBackend};
-    use spectra_core::{try_record_counter_now, NoOpSink, RecordingSink, SpectraConfig};
+    use spectra_core::{try_record_counter_now, RecordingSink, SpectraConfig};
 
     fn mem_backends() -> (SharedMetricsBackend, SharedEventBackend) {
         (
