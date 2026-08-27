@@ -312,8 +312,6 @@ mod tests {
     use spectra_backend_mem::{MemEventsBackend, MemMetricsBackend};
     use spectra_core::{try_record_counter_now, NoOpSink, RecordingSink, SpectraConfig};
 
-    static RUNTIME_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
     fn mem_backends() -> (SharedMetricsBackend, SharedEventBackend) {
         (
             Arc::new(MemMetricsBackend::new()),
@@ -326,13 +324,14 @@ mod tests {
         F: FnOnce() -> Fut,
         Fut: std::future::Future<Output = ()>,
     {
-        let _g = RUNTIME_TEST_LOCK.lock().await;
+        let _g = spectra_core::GLOBAL_TEST_LOCK.lock().await;
+        spectra_core::reset_config_and_sink_for_test();
         spectra_core::install_config(SpectraConfig {
             enabled: false,
             ..Default::default()
         });
         f().await;
-        spectra_core::set_sink(Arc::new(NoOpSink));
+        spectra_core::reset_config_and_sink_for_test();
     }
 
     #[tokio::test]
@@ -449,7 +448,8 @@ mod tests {
 
     #[tokio::test]
     async fn persist_disabled_without_sink_errors() {
-        let _g = RUNTIME_TEST_LOCK.lock().await;
+        let _g = spectra_core::GLOBAL_TEST_LOCK.lock().await;
+        spectra_core::reset_config_and_sink_for_test();
         let (metrics, events) = mem_backends();
         let result = Spectra::builder()
             .metrics_backend(metrics)

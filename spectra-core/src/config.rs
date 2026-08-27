@@ -327,7 +327,6 @@ pub(crate) fn policy_for(name: &str) -> EmitPolicy {
         .unwrap_or_default()
 }
 
-#[cfg(test)]
 pub fn reset_config_for_test() {
     *slot().write() = None;
 }
