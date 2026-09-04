@@ -1,0 +1,26 @@
+[package]
+name = "spectra-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SpectraBuilder, composite sink, and process install"
+repository.workspace = true
+readme = "README.md"
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = "1"
+spectra-core = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+tracing = { workspace = true }
+
+[features]
+default = []
+telemetry-console = []
+
+[dev-dependencies]
+spectra-backend-mem = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

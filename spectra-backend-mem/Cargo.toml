@@ -1,0 +1,23 @@
+[package]
+name = "spectra-backend-mem"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "In-memory metrics and events backend (public crate default)"
+repository.workspace = true
+readme = "README.md"
+
+[dependencies]
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+parking_lot = { workspace = true }
+serde_json = "1"
+spectra-core = { workspace = true }
+tokio = { version = "1", features = ["sync"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+spectra-testkit = { path = "../spectra-testkit" }
+
+[lints]
+workspace = true
