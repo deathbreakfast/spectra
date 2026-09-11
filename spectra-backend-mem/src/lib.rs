@@ -4,7 +4,8 @@
 //! re-exports from the `spectra` crate (`MemMetricsBackend`, `MemEventsBackend`).
 //!
 //! - Data is process-local and lost on exit; not suitable for production durability.
-//! - `query_aggregate` supports `Count` measure only; other measures return empty series.
+//! - `query_aggregate` loads matching rows and runs [`spectra_core::aggregate_event_rows`]
+//!   (Count and Sum; Pie/Bar need `group_by_field`).
 //! - Uses `parking_lot::RwLock`; contended writes may block the async runtime thread briefly.
 
 use std::collections::HashMap;
@@ -13,11 +14,11 @@ use parking_lot::RwLock;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use serde_json::{json, Value};
+use serde_json::Value;
 use spectra_core::{
-    EventAggregateResult, EventMeasure, EventRow, EventStorageBackend, EventsAggregateFilter,
-    EventsQueryFilter, LabelMatcher, MetricPoint, MetricPointDto, MetricsQueryRange,
-    MetricsStorageBackend, Result, StorageEngineType, TimeSeriesDto,
+    aggregate_event_rows, EventAggregateResult, EventRow, EventStorageBackend,
+    EventsAggregateFilter, EventsQueryFilter, LabelMatcher, MetricPoint, MetricsQueryRange,
+    MetricsStorageBackend, Result, StorageEngineType,
 };
 
 /// Non-durable in-memory metrics storage.
@@ -284,23 +285,7 @@ impl EventStorageBackend for MemEventsBackend {
                 filter: filter.filter.clone(),
             })
             .await?;
-        let count = rows.len() as u64;
-        match filter.measure {
-            EventMeasure::Count => Ok(EventAggregateResult::TimeSeries {
-                series: vec![TimeSeriesDto {
-                    labels: json!({}),
-                    points: vec![MetricPointDto {
-                        ts: filter.end,
-                        value: count as f64,
-                    }],
-                }],
-                headline: vec![],
-            }),
-            _ => Ok(EventAggregateResult::TimeSeries {
-                series: vec![],
-                headline: vec![],
-            }),
-        }
+        Ok(aggregate_event_rows(filter.view, &filter, &rows))
     }
 }
 

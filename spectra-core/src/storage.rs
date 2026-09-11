@@ -118,6 +118,8 @@ pub struct EventsAggregateFilter {
     pub time_bucket_secs: Option<u64>,
     /// Field to group by for slice views.
     pub group_by_field: Option<String>,
+    /// Explore chart view that selects TimeSeries vs Slices result shape.
+    pub view: crate::query::EventExploreView,
 }
 
 /// Metric point for query results.

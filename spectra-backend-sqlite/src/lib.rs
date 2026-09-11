@@ -4,7 +4,8 @@
 //!
 //! - [`SqliteMetricsBackend::new`] / [`SqliteEventsBackend::new`] — open or create database files
 //! - Parent directories are created automatically; uses `spawn_blocking` for rusqlite I/O.
-//! - `query_aggregate` is not yet implemented (returns empty series).
+//! - `query_aggregate` loads matching rows and runs [`spectra_core::aggregate_event_rows`]
+//!   (same Count/Sum and Pie/Bar group-by behavior as the mem backend).
 //! - Default event query limit is 1000 rows when `limit` is unset.
 
 use std::path::{Path, PathBuf};
@@ -17,9 +18,9 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use serde_json::Value;
 use spectra_core::{
-    Error, EventAggregateResult, EventRow, EventStorageBackend, EventsAggregateFilter,
-    EventsQueryFilter, LabelMatcher, MetricPoint, MetricsQueryRange, MetricsStorageBackend, Result,
-    StorageEngineType,
+    aggregate_event_rows, Error, EventAggregateResult, EventRow, EventStorageBackend,
+    EventsAggregateFilter, EventsQueryFilter, LabelMatcher, MetricPoint, MetricsQueryRange,
+    MetricsStorageBackend, Result, StorageEngineType,
 };
 
 const METRICS_DDL: &str = r"
@@ -432,14 +433,21 @@ impl EventStorageBackend for SqliteEventsBackend {
         Ok(spectra_core::finalize_event_rows(out, &filter))
     }
 
-    async fn query_aggregate(
-        &self,
-        _filter: EventsAggregateFilter,
-    ) -> Result<EventAggregateResult> {
-        Ok(EventAggregateResult::TimeSeries {
-            series: vec![],
-            headline: vec![],
-        })
+    async fn query_aggregate(&self, filter: EventsAggregateFilter) -> Result<EventAggregateResult> {
+        let rows = self
+            .query_rows(EventsQueryFilter {
+                table: filter.table.clone(),
+                start: Some(filter.start),
+                end: Some(filter.end),
+                partition: filter.partition.clone(),
+                limit: None,
+                offset: None,
+                sort_field: None,
+                sort_desc: false,
+                filter: filter.filter.clone(),
+            })
+            .await?;
+        Ok(aggregate_event_rows(filter.view, &filter, &rows))
     }
 }
 

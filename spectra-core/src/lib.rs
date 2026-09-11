@@ -84,8 +84,9 @@ pub use query::{
     SchemaDetailDto, SchemaFieldDto, SchemaListItem, SliceDto, StatCardDto, TimeSeriesDto,
 };
 pub use query_map::{
-    aggregate_request_to_filter, aggregate_rows_to_result, event_query_to_filter, list_schemas,
-    metrics_query_to_range, points_to_metrics_result, rows_to_event_result, schema_detail,
+    aggregate_event_rows, aggregate_request_to_filter, aggregate_rows_to_result,
+    event_query_to_filter, list_schemas, metrics_query_to_range, points_to_metrics_result,
+    rows_to_event_result, schema_detail,
 };
 pub use registry::{
     collect_distinct_spectra_store_names, LoggingKind, SchemaFieldMetadata, SchemaMetadata,
