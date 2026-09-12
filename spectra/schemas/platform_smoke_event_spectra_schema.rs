@@ -11,14 +11,6 @@ spectra_schema! {
                 r#type: String,
                 classification: { pii: false, safe_for_console: true },
             },
-            severity: {
-                r#type: String,
-                classification: { pii: false, safe_for_console: true },
-            },
-            value: {
-                r#type: f64,
-                classification: { pii: false, safe_for_console: true },
-            },
         ],
     }
 }
