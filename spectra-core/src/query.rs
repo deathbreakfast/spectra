@@ -80,6 +80,8 @@ pub enum EventExploreView {
     PieChart,
     /// Bar chart view.
     BarChart,
+    /// Pivot / cross-tab table of aggregate counts (or sums).
+    Table,
 }
 
 /// Mirrors MUI `GridPaginationModel`.
@@ -244,17 +246,18 @@ pub struct EventQueryResult {
 }
 
 /// Aggregation measure for chart views.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum EventMeasure {
     /// Count matching rows.
+    #[default]
     Count,
     /// Sum a numeric field.
     Sum,
 }
 
 /// Aggregation parameters for event chart queries.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct EventAggregationSpec {
     /// Measure to compute.
     pub measure: EventMeasure,
@@ -262,8 +265,14 @@ pub struct EventAggregationSpec {
     pub measure_field: Option<String>,
     /// Time bucket width in seconds for time-series views.
     pub time_bucket_secs: Option<u64>,
-    /// Field to group by for slice views.
+    /// Field to group by for slice views (Bar/Pie).
     pub group_by_field: Option<String>,
+    /// Ordered row-key fields for [`EventExploreView::Table`].
+    #[serde(default)]
+    pub row_fields: Vec<String>,
+    /// Optional column pivot field for [`EventExploreView::Table`].
+    #[serde(default)]
+    pub pivot_field: Option<String>,
 }
 
 /// Event chart aggregate request.
@@ -294,6 +303,15 @@ pub struct SliceDto {
     pub value: f64,
 }
 
+/// One row in a Table (pivot) aggregate response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PivotRowDto {
+    /// Values for each `row_fields` entry, in order.
+    pub row_values: Vec<String>,
+    /// Measure cells aligned to `column_keys`.
+    pub cells: Vec<f64>,
+}
+
 /// Event aggregate query response (shape depends on view).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventAggregateResult {
@@ -308,6 +326,21 @@ pub enum EventAggregateResult {
     Slices {
         /// Category slices.
         slices: Vec<SliceDto>,
+        /// Headline summary cards.
+        headline: Vec<StatCardDto>,
+    },
+    /// Table / pivot matrix payload.
+    ///
+    /// Distinct `pivot_field` values become `column_keys`, capped at the top 50 by measure
+    /// with an `(other)` bucket for the rest. When `pivot_field` is unset, `column_keys`
+    /// holds a single measure header.
+    Pivot {
+        /// Row field names (headers for leading columns).
+        row_fields: Vec<String>,
+        /// Pivot column keys (or a single measure header when unpivoted).
+        column_keys: Vec<String>,
+        /// Matrix rows.
+        rows: Vec<PivotRowDto>,
         /// Headline summary cards.
         headline: Vec<StatCardDto>,
     },

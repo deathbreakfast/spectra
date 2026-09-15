@@ -6,8 +6,8 @@ use serde_json::{json, Value};
 use crate::query::{
     EventAggregateRequest, EventAggregateResult, EventExploreView, EventGridRow, EventMeasure,
     EventQuery, EventQueryResult, GridColumnDto, GridSortDirection, MetricsQuery,
-    MetricsQueryResult, SchemaDetailDto, SchemaFieldDto, SchemaListItem, SliceDto, StatCardDto,
-    TimeSeriesDto,
+    MetricsQueryResult, PivotRowDto, SchemaDetailDto, SchemaFieldDto, SchemaListItem, SliceDto,
+    StatCardDto, TimeSeriesDto,
 };
 use crate::registry::{LoggingKind, SchemaMetadata, SchemaRegistry};
 use crate::storage::{EventRow, EventsAggregateFilter, EventsQueryFilter, MetricPoint};
@@ -48,6 +48,8 @@ pub fn aggregate_request_to_filter(req: &EventAggregateRequest) -> EventsAggrega
         measure_field: req.aggregation.measure_field.clone(),
         time_bucket_secs: req.aggregation.time_bucket_secs,
         group_by_field: req.aggregation.group_by_field.clone(),
+        row_fields: req.aggregation.row_fields.clone(),
+        pivot_field: req.aggregation.pivot_field.clone(),
         view: req.view,
     }
 }
@@ -289,6 +291,12 @@ pub fn aggregate_rows_to_result(
             series: Vec::new(),
             headline: Vec::new(),
         },
+        EventExploreView::Table => EventAggregateResult::Pivot {
+            row_fields: Vec::new(),
+            column_keys: Vec::new(),
+            rows: Vec::new(),
+            headline: Vec::new(),
+        },
     }
 }
 
@@ -296,7 +304,9 @@ pub fn aggregate_rows_to_result(
 ///
 /// Mem and SQLite backends call this after [`crate::EventStorageBackend::query_rows`].
 /// Pie/Bar without `group_by_field` return empty slices. Sum without a numeric
-/// `measure_field` contributes `0.0` per row.
+/// `measure_field` contributes `0.0` per row. Table (`Pivot`) groups by
+/// `row_fields` and optionally spreads `pivot_field` values into columns, capping
+/// distinct pivot keys at the top 50 by measure plus an `(other)` bucket.
 ///
 /// # Examples
 ///
@@ -330,6 +340,8 @@ pub fn aggregate_rows_to_result(
 ///     measure_field: None,
 ///     time_bucket_secs: None,
 ///     group_by_field: Some("severity".into()),
+///     row_fields: vec![],
+///     pivot_field: None,
 ///     view: EventExploreView::PieChart,
 /// };
 /// let result = aggregate_event_rows(filter.view, &filter, &rows);
@@ -413,6 +425,156 @@ pub fn aggregate_event_rows(
                 .collect();
             aggregate_rows_to_result(view, mapped, filter.measure)
         }
+        EventExploreView::Table => aggregate_table_pivot(filter, rows),
+    }
+}
+
+const PIVOT_COLUMN_CAP: usize = 50;
+
+fn field_label(raw: &Value) -> String {
+    match raw {
+        Value::String(s) => s.clone(),
+        Value::Null => "(blank)".into(),
+        other => other.to_string(),
+    }
+}
+
+fn aggregate_table_pivot(
+    filter: &EventsAggregateFilter,
+    rows: &[EventRow],
+) -> EventAggregateResult {
+    let row_fields: Vec<String> = filter
+        .row_fields
+        .iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if row_fields.is_empty() {
+        return EventAggregateResult::Pivot {
+            row_fields: Vec::new(),
+            column_keys: Vec::new(),
+            rows: Vec::new(),
+            headline: Vec::new(),
+        };
+    }
+
+    let pivot_field = filter
+        .pivot_field
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    let measure_header = match filter.measure {
+        EventMeasure::Count => "Count".to_string(),
+        EventMeasure::Sum => filter.measure_field.clone().unwrap_or_else(|| "Sum".into()),
+    };
+
+    // (row_key, pivot_key) -> value
+    let mut cells: std::collections::HashMap<(Vec<String>, String), f64> =
+        std::collections::HashMap::new();
+    let mut pivot_totals: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+
+    for row in rows {
+        let mut row_values = Vec::with_capacity(row_fields.len());
+        let mut ok = true;
+        for field in &row_fields {
+            let Some(raw) = row.fields.get(field) else {
+                ok = false;
+                break;
+            };
+            row_values.push(field_label(raw));
+        }
+        if !ok {
+            continue;
+        }
+        let pivot_key = match &pivot_field {
+            Some(pf) => row
+                .fields
+                .get(pf)
+                .map(field_label)
+                .unwrap_or_else(|| "(blank)".into()),
+            None => measure_header.clone(),
+        };
+        let contrib = row_measure_value(row, filter.measure, filter.measure_field.as_deref());
+        *cells.entry((row_values, pivot_key.clone())).or_insert(0.0) += contrib;
+        *pivot_totals.entry(pivot_key).or_insert(0.0) += contrib;
+    }
+
+    let mut column_keys: Vec<String> = if pivot_field.is_some() {
+        let mut ordered: Vec<(String, f64)> = pivot_totals.into_iter().collect();
+        ordered.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.0.cmp(&b.0))
+        });
+        if ordered.len() > PIVOT_COLUMN_CAP {
+            let keep: Vec<String> = ordered
+                .iter()
+                .take(PIVOT_COLUMN_CAP)
+                .map(|(k, _)| k.clone())
+                .collect();
+            let mut capped_cells: std::collections::HashMap<(Vec<String>, String), f64> =
+                std::collections::HashMap::new();
+            for ((row_key, pivot_key), value) in cells {
+                let key = if keep.iter().any(|k| k == &pivot_key) {
+                    pivot_key
+                } else {
+                    "(other)".into()
+                };
+                *capped_cells.entry((row_key, key)).or_insert(0.0) += value;
+            }
+            cells = capped_cells;
+            let mut keys = keep;
+            keys.push("(other)".into());
+            keys
+        } else {
+            ordered.into_iter().map(|(k, _)| k).collect()
+        }
+    } else {
+        vec![measure_header]
+    };
+
+    if column_keys.is_empty() {
+        column_keys.push("Count".into());
+    }
+
+    let mut row_map: std::collections::BTreeMap<Vec<String>, Vec<f64>> =
+        std::collections::BTreeMap::new();
+    for ((row_key, pivot_key), value) in cells {
+        let entry = row_map
+            .entry(row_key)
+            .or_insert_with(|| vec![0.0; column_keys.len()]);
+        if let Some(idx) = column_keys.iter().position(|k| k == &pivot_key) {
+            entry[idx] += value;
+        }
+    }
+
+    let pivot_rows: Vec<PivotRowDto> = row_map
+        .into_iter()
+        .map(|(row_values, cells)| PivotRowDto { row_values, cells })
+        .collect();
+
+    let total: f64 = pivot_rows.iter().flat_map(|r| r.cells.iter()).sum();
+    let headline = vec![
+        StatCardDto {
+            label: "Rows".into(),
+            value: pivot_rows.len().to_string(),
+        },
+        StatCardDto {
+            label: "Columns".into(),
+            value: column_keys.len().to_string(),
+        },
+        StatCardDto {
+            label: "Total".into(),
+            value: format!("{total:.0}"),
+        },
+    ];
+
+    EventAggregateResult::Pivot {
+        row_fields,
+        column_keys,
+        rows: pivot_rows,
+        headline,
     }
 }
 
@@ -456,7 +618,32 @@ mod aggregate_event_rows_tests {
             measure_field: measure_field.map(str::to_string),
             time_bucket_secs: bucket,
             group_by_field: group_by.map(str::to_string),
+            row_fields: Vec::new(),
+            pivot_field: None,
             view,
+        }
+    }
+
+    fn table_filter(
+        measure: EventMeasure,
+        measure_field: Option<&str>,
+        row_fields: &[&str],
+        pivot_field: Option<&str>,
+    ) -> EventsAggregateFilter {
+        let end = Utc::now();
+        EventsAggregateFilter {
+            table: "t".into(),
+            start: end - Duration::hours(1),
+            end,
+            partition: None,
+            filter: GridFilterModel::default(),
+            measure,
+            measure_field: measure_field.map(str::to_string),
+            time_bucket_secs: None,
+            group_by_field: None,
+            row_fields: row_fields.iter().map(|s| (*s).to_string()).collect(),
+            pivot_field: pivot_field.map(str::to_string),
+            view: EventExploreView::Table,
         }
     }
 
@@ -594,10 +781,85 @@ mod aggregate_event_rows_tests {
                 measure_field: None,
                 time_bucket_secs: Some(60),
                 group_by_field: Some("severity".into()),
+                row_fields: vec![],
+                pivot_field: None,
             },
         };
         let mapped = aggregate_request_to_filter(&req);
         assert_eq!(mapped.view, EventExploreView::BarChart);
         assert_eq!(mapped.group_by_field.as_deref(), Some("severity"));
+    }
+
+    #[test]
+    fn aggregate_event_rows_table_pivot_happy() {
+        let f = table_filter(EventMeasure::Count, None, &["severity"], Some("outcome"));
+        let rows = vec![
+            EventRow {
+                ts: Utc::now() - Duration::minutes(5),
+                fields: json!({"severity": "info", "value": 10, "outcome": "allow"}),
+            },
+            EventRow {
+                ts: Utc::now() - Duration::minutes(4),
+                fields: json!({"severity": "warn", "value": 3, "outcome": "deny"}),
+            },
+            EventRow {
+                ts: Utc::now() - Duration::minutes(3),
+                fields: json!({"severity": "info", "value": 5, "outcome": "allow"}),
+            },
+        ];
+        match aggregate_event_rows(f.view, &f, &rows) {
+            EventAggregateResult::Pivot {
+                row_fields,
+                column_keys,
+                rows: pivot_rows,
+                ..
+            } => {
+                assert_eq!(row_fields, vec!["severity".to_string()]);
+                assert!(column_keys.iter().any(|k| k == "allow"));
+                assert!(column_keys.iter().any(|k| k == "deny"));
+                let info = pivot_rows
+                    .iter()
+                    .find(|r| r.row_values == ["info"])
+                    .expect("info row");
+                let allow_idx = column_keys.iter().position(|k| k == "allow").unwrap();
+                assert!((info.cells[allow_idx] - 2.0).abs() < f64::EPSILON);
+            }
+            other => panic!("expected pivot: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn aggregate_event_rows_table_flat_happy() {
+        let f = table_filter(EventMeasure::Sum, Some("value"), &["severity"], None);
+        let rows = vec![row(5, "info", 10), row(4, "warn", 3), row(3, "info", 5)];
+        match aggregate_event_rows(f.view, &f, &rows) {
+            EventAggregateResult::Pivot {
+                column_keys,
+                rows: pivot_rows,
+                ..
+            } => {
+                assert_eq!(column_keys, vec!["value".to_string()]);
+                let info = pivot_rows
+                    .iter()
+                    .find(|r| r.row_values == ["info"])
+                    .expect("info");
+                assert!((info.cells[0] - 15.0).abs() < f64::EPSILON);
+            }
+            other => panic!("expected flat pivot: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn aggregate_event_rows_table_no_row_fields_sad() {
+        let f = table_filter(EventMeasure::Count, None, &[], None);
+        let rows = vec![row(5, "info", 10)];
+        match aggregate_event_rows(f.view, &f, &rows) {
+            EventAggregateResult::Pivot {
+                rows: pivot_rows, ..
+            } => {
+                assert!(pivot_rows.is_empty());
+            }
+            other => panic!("expected empty pivot: {other:?}"),
+        }
     }
 }
