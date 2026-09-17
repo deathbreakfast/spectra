@@ -118,6 +118,12 @@ pub struct EventsAggregateFilter {
     pub time_bucket_secs: Option<u64>,
     /// Field to group by for slice views.
     pub group_by_field: Option<String>,
+    /// Ordered row-key fields for Table pivot.
+    pub row_fields: Vec<String>,
+    /// Optional column pivot field for Table.
+    pub pivot_field: Option<String>,
+    /// Explore chart view that selects TimeSeries vs Slices vs Pivot result shape.
+    pub view: crate::query::EventExploreView,
 }
 
 /// Metric point for query results.
