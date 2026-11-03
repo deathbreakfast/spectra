@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::registry::SchemaMetadata;
+
 /// Replacement shown when a field is classified as PII (or unsafe for console).
 pub const PII_MASK: &str = "***";
 
@@ -61,6 +63,24 @@ pub fn mask_field_value(classification: &FieldClassification, value: &Value) -> 
     }
 }
 
+/// Replaces every PII field in an event row payload with [`PII_MASK`].
+///
+/// Only fields the schema classifies as `pii` and that are present in `fields` are touched;
+/// other values keep their JSON type, and keys the schema does not list are left alone.
+/// Unlike [`mask_field_value`], `safe_for_console` is ignored: it governs console output,
+/// not grid display.
+#[must_use]
+pub fn mask_pii_fields(mut fields: Value, schema: &SchemaMetadata) -> Value {
+    if let Value::Object(map) = &mut fields {
+        for field in schema.fields.iter().filter(|f| f.classification.pii) {
+            if let Some(slot) = map.get_mut(&field.name) {
+                *slot = Value::String(PII_MASK.to_string());
+            }
+        }
+    }
+    fields
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,5 +131,50 @@ mod tests {
         };
         assert_eq!(mask_field_value(&c, &json!("ok")), "ok");
         assert_eq!(mask_field_value(&c, &json!(1)), "1");
+    }
+
+    fn schema() -> SchemaMetadata {
+        use crate::registry::SchemaFieldMetadata;
+        let field = |name: &str, pii: bool| SchemaFieldMetadata {
+            name: name.to_string(),
+            rust_type: "String".to_string(),
+            classification: FieldClassification {
+                pii,
+                safe_for_console: false,
+                retention_days: None,
+                purpose: None,
+            },
+        };
+        SchemaMetadata {
+            fields: vec![
+                field("email", true),
+                field("count", false),
+                field("age", true),
+            ],
+            ..SchemaMetadata::default()
+        }
+    }
+
+    #[test]
+    fn mask_pii_fields_masks_only_pii_and_keeps_types() {
+        let out = mask_pii_fields(
+            json!({"email": "a@b.c", "count": 7, "id": "r1", "other": true}),
+            &schema(),
+        );
+        assert_eq!(
+            out,
+            json!({"email": PII_MASK, "count": 7, "id": "r1", "other": true})
+        );
+    }
+
+    #[test]
+    fn mask_pii_fields_does_not_invent_missing_keys() {
+        let out = mask_pii_fields(json!({"count": 1}), &schema());
+        assert_eq!(out, json!({"count": 1}));
+    }
+
+    #[test]
+    fn mask_pii_fields_ignores_non_objects() {
+        assert_eq!(mask_pii_fields(json!("x"), &schema()), json!("x"));
     }
 }
