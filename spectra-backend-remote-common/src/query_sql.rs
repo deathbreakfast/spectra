@@ -207,8 +207,8 @@ pub fn paging_clause(filter: &EventsQueryFilter) -> String {
 ///
 /// - time series / line: `label` is the bucket start as Unix seconds, aligned to the epoch
 ///   the same way [`spectra_core::aggregate_event_rows`] aligns in-memory rows;
-/// - pie / bar: `label` is the group field value (strings unquoted, other JSON raw), and
-///   rows without the field are excluded;
+/// - pie / bar: `label` is the group field value (strings unquoted, other JSON raw); rows
+///   with the field missing or `null` fall in the [`PIVOT_BLANK_LABEL`] group;
 /// - table: `label` is a JSON array of row-key labels followed by the pivot label when a
 ///   pivot field is set. Rows missing any row field are excluded; a missing or `null`
 ///   pivot value becomes [`PIVOT_BLANK_LABEL`].
@@ -243,10 +243,10 @@ pub fn aggregate_sql(filter: &EventsAggregateFilter) -> Result<Option<String>> {
             let key = json_key(field)?;
             (
                 format!(
-                    "if(JSONType(fields, {key}) = 'String', JSONExtractString(fields, {key}), \
-                     JSONExtractRaw(fields, {key}))"
+                    "if(JSONHas(fields, {key}), {}, '{PIVOT_BLANK_LABEL}')",
+                    table_label_expr(&key)
                 ),
-                vec![key],
+                Vec::new(),
                 "value DESC, label ASC",
             )
         }
@@ -489,7 +489,7 @@ mod tests {
     }
 
     #[test]
-    fn aggregate_sql_slices_require_group_field_and_sum_numbers_only() {
+    fn aggregate_sql_slices_blank_missing_group_field_and_sum_numbers_only() {
         let sql = aggregate_sql(&EventsAggregateFilter {
             group_by_field: Some(" region ".into()),
             measure: EventMeasure::Sum,
@@ -499,7 +499,9 @@ mod tests {
         .expect("sql")
         .expect("bar aggregates");
         assert!(sql.contains("JSONExtractString(fields, 'region')"));
-        assert!(sql.contains("AND JSONHas(fields, 'region')"));
+        assert!(sql.contains("if(JSONHas(fields, 'region'), "));
+        assert!(sql.contains("'(blank)'"));
+        assert!(!sql.contains("AND JSONHas(fields, 'region')"));
         assert!(sql.contains("IN ('Int64', 'UInt64', 'Double')"));
         assert!(sql.contains("JSONExtractFloat(fields, 'bytes')"));
         assert!(sql.contains("ORDER BY value DESC, label ASC"));

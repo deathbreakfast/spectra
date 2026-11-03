@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use spectra_core::{
     aggregate_event_rows, aggregate_rows_to_result, pivot_from_cells, Error, EventAggregateResult,
     EventExploreView, EventRow, EventStorageBackend, EventWriteRow, EventsAggregateFilter,
-    EventsQueryFilter, PivotCell, Result, StorageEngineType, StorageStats,
+    EventsQueryFilter, PivotCell, Result, StorageEngineType, StorageStats, PIVOT_BLANK_LABEL,
 };
 
 use crate::client::{
@@ -235,7 +235,10 @@ fn aggregate_result_from_groups(
             Ok(aggregate_rows_to_result(filter.view, rows, filter.measure))
         }
         EventExploreView::PieChart | EventExploreView::BarChart => {
-            if groups.is_empty() {
+            // A lone blank group means no row carried a value for the field.
+            let only_blank =
+                matches!(groups.as_slice(), [(label, _)] if label == PIVOT_BLANK_LABEL);
+            if groups.is_empty() || only_blank {
                 return Ok(EventAggregateResult::Slices {
                     slices: Vec::new(),
                     headline: Vec::new(),

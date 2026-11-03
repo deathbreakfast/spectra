@@ -303,7 +303,9 @@ pub fn aggregate_rows_to_result(
 /// Aggregates in-memory event rows into a chart result for `view`.
 ///
 /// Mem and SQLite backends call this after [`crate::EventStorageBackend::query_rows`].
-/// Pie/Bar without `group_by_field` return empty slices. Sum without a numeric
+/// Pie/Bar without `group_by_field` return empty slices. Rows whose group field is missing
+/// or `null` fall in a [`PIVOT_BLANK_LABEL`] slice, so totals match the rows scanned; when no
+/// row has a value for the field the result is empty. Sum without a numeric
 /// `measure_field` contributes `0.0` per row. Table (`Pivot`) groups by
 /// `row_fields` and optionally spreads `pivot_field` values into columns, capping
 /// distinct pivot keys at the top 50 by measure plus an `(other)` bucket.
@@ -396,13 +398,12 @@ pub fn aggregate_event_rows(
                 std::collections::BTreeMap::new();
             let mut saw_field = false;
             for row in rows {
-                let Some(raw) = row.fields.get(group_field) else {
-                    continue;
-                };
-                saw_field = true;
-                let label = match raw {
-                    Value::String(s) => s.clone(),
-                    other => other.to_string(),
+                let label = match row.fields.get(group_field) {
+                    Some(raw) => {
+                        saw_field |= !raw.is_null();
+                        field_label(raw)
+                    }
+                    None => PIVOT_BLANK_LABEL.into(),
                 };
                 let contrib =
                     row_measure_value(row, filter.measure, filter.measure_field.as_deref());
@@ -740,6 +741,48 @@ mod aggregate_event_rows_tests {
                 assert!(labels.contains(&"warn"));
             }
             other => panic!("expected slices: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn aggregate_event_rows_pie_buckets_rows_missing_group_field_happy() {
+        let f = filter(
+            EventExploreView::PieChart,
+            EventMeasure::Count,
+            None,
+            Some("severity"),
+            None,
+        );
+        let mut old = row(3, "info", 1);
+        old.fields = json!({"value": 1});
+        let mut null = row(2, "info", 1);
+        null.fields = json!({"severity": null});
+        let rows = vec![row(5, "info", 10), old, null];
+        match aggregate_event_rows(f.view, &f, &rows) {
+            EventAggregateResult::Slices { slices, headline } => {
+                let got: Vec<_> = slices.iter().map(|s| (s.label.as_str(), s.value)).collect();
+                assert_eq!(got, vec![(PIVOT_BLANK_LABEL, 2.0), ("info", 1.0)]);
+                assert_eq!(headline[1].value, "3");
+            }
+            other => panic!("expected slices: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn aggregate_event_rows_pie_field_absent_everywhere_sad() {
+        let f = filter(
+            EventExploreView::PieChart,
+            EventMeasure::Count,
+            None,
+            Some("nope"),
+            None,
+        );
+        let rows = vec![row(1, "info", 1)];
+        match aggregate_event_rows(f.view, &f, &rows) {
+            EventAggregateResult::Slices { slices, headline } => {
+                assert!(slices.is_empty() && headline.is_empty());
+            }
+            other => panic!("expected empty slices: {other:?}"),
         }
     }
 
