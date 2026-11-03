@@ -361,13 +361,40 @@ impl SpectraBuilder {
         Ok(self)
     }
 
+    /// Router the persist worker writes through: `persist_store_backend` entries layered over
+    /// `store_backend` entries, with `persist_backend` (else the read default) as fallback.
+    fn build_write_router(
+        &self,
+        metrics: &SharedMetricsBackend,
+        events: &SharedEventBackend,
+        registry: &SchemaRegistry,
+    ) -> SpectraRouter {
+        let mut store_metrics = self.store_metrics.clone();
+        store_metrics.extend(self.persist_store_metrics.clone());
+        let mut store_events = self.store_events.clone();
+        store_events.extend(self.persist_store_events.clone());
+        build_router_from_registry(
+            self.persist_metrics
+                .clone()
+                .unwrap_or_else(|| Arc::clone(metrics)),
+            self.persist_events
+                .clone()
+                .unwrap_or_else(|| Arc::clone(events)),
+            store_metrics,
+            store_events,
+            registry,
+        )
+    }
+
     /// Install global config, router, and sink; returns a handle to the running runtime.
-    pub fn build(self) -> spectra_core::Result<Spectra> {
+    pub fn build(mut self) -> spectra_core::Result<Spectra> {
         let metrics = self
             .metrics
+            .take()
             .ok_or_else(|| spectra_core::Error::config("metrics_backend is required"))?;
         let events = self
             .events
+            .take()
             .ok_or_else(|| spectra_core::Error::config("events_backend is required"))?;
 
         let has_persist_backends =
@@ -379,21 +406,7 @@ impl SpectraBuilder {
         }
 
         let write_router = has_persist_backends.then(|| {
-            let mut store_metrics = self.store_metrics.clone();
-            store_metrics.extend(self.persist_store_metrics.clone());
-            let mut store_events = self.store_events.clone();
-            store_events.extend(self.persist_store_events.clone());
-            Arc::new(build_router_from_registry(
-                self.persist_metrics
-                    .clone()
-                    .unwrap_or_else(|| Arc::clone(&metrics)),
-                self.persist_events
-                    .clone()
-                    .unwrap_or_else(|| Arc::clone(&events)),
-                store_metrics,
-                store_events,
-                SchemaRegistry::global(),
-            ))
+            Arc::new(self.build_write_router(&metrics, &events, SchemaRegistry::global()))
         });
 
         let router = build_router(metrics, events, self.store_metrics, self.store_events);
@@ -820,38 +833,49 @@ mod tests {
     }
 
     #[test]
-    fn persist_store_backend_overrides_write_only_happy() {
+    fn persist_store_backend_layers_over_store_backend_happy() {
         let mut registry = SchemaRegistry::new();
         registry.register(schema("pa_metric", "a", LoggingKind::Metric));
         registry.register(schema("pb_metric", "b", LoggingKind::Metric));
 
         let (default_m, default_e) = mem_backends();
-        let (persist_default_m, _) = mem_backends();
-        let (persist_a_m, _) = mem_backends();
+        let (persist_default_m, persist_default_e) = mem_backends();
+        let (a_m, a_e) = mem_backends();
+        let (persist_a_m, persist_a_e) = mem_backends();
 
-        // `build()` layers persist_store_backend entries over store_backend entries.
-        let mut store_metrics = HashMap::new();
-        store_metrics.insert("a".to_string(), Arc::clone(&persist_a_m));
-        let write = build_router_from_registry(
-            Arc::clone(&persist_default_m),
-            default_e,
-            store_metrics,
-            HashMap::new(),
-            &registry,
-        );
+        let builder = SpectraBuilder::new()
+            .store_backend("a", Arc::clone(&a_m), a_e)
+            .persist_backend(Arc::clone(&persist_default_m), persist_default_e)
+            .persist_store_backend("a", Arc::clone(&persist_a_m), persist_a_e);
+        let write = builder.build_write_router(&default_m, &default_e, &registry);
 
+        // Write override wins over the read store backend for store "a".
         assert!(Arc::ptr_eq(
             &write.resolve_metrics("pa_metric"),
             &persist_a_m
         ));
+        // Store "b" has no override and falls to the persist default.
         assert!(Arc::ptr_eq(
             &write.resolve_metrics("pb_metric"),
             &persist_default_m
         ));
-        assert!(!Arc::ptr_eq(
-            &write.resolve_metrics("pb_metric"),
-            &default_m
-        ));
+    }
+
+    #[test]
+    fn store_backend_without_persist_override_keeps_writing_there_sad() {
+        let mut registry = SchemaRegistry::new();
+        registry.register(schema("pa_metric", "a", LoggingKind::Metric));
+
+        let (default_m, default_e) = mem_backends();
+        let (persist_default_m, persist_default_e) = mem_backends();
+        let (a_m, a_e) = mem_backends();
+
+        let builder = SpectraBuilder::new()
+            .store_backend("a", Arc::clone(&a_m), a_e)
+            .persist_backend(persist_default_m, persist_default_e);
+        let write = builder.build_write_router(&default_m, &default_e, &registry);
+
+        assert!(Arc::ptr_eq(&write.resolve_metrics("pa_metric"), &a_m));
     }
 
     #[tokio::test]
