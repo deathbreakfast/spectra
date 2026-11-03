@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use spectra_core::{
     aggregate_event_rows, aggregate_rows_to_result, pivot_from_cells, Error, EventAggregateResult,
     EventExploreView, EventRow, EventStorageBackend, EventWriteRow, EventsAggregateFilter,
-    EventsQueryFilter, PivotCell, Result, StorageEngineType,
+    EventsQueryFilter, PivotCell, Result, StorageEngineType, StorageStats,
 };
 
 use crate::client::{
@@ -158,6 +158,21 @@ impl EventStorageBackend for RemoteEventsBackend {
                     });
                 }
                 Ok(out)
+            }
+        }
+    }
+
+    async fn event_stats(&self, table: &str) -> Result<StorageStats> {
+        spectra_core::validate_spectra_ident(table)?;
+        match &self.inner {
+            EventsInner::Mem(store) => Ok(store.event_stats(table)),
+            EventsInner::Remote(client) => {
+                let sql = format!(
+                    "SELECT toString(count()), toString(min(ts)), toString(max(ts)) \
+                     FROM spectra_events WHERE table_name = '{}'",
+                    query_sql::escape_str(table)?
+                );
+                client.query_stats(&sql).await
             }
         }
     }

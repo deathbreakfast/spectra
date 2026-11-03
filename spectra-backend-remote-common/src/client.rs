@@ -230,6 +230,29 @@ impl RemoteClient {
         }
     }
 
+    /// Run a `count()/min(ts)/max(ts)` query and shape it as [`spectra_core::StorageStats`].
+    ///
+    /// `sql` must select `toString(count())`, `min(ts)` and `max(ts)` as strings. Timestamps are
+    /// ignored when the count is zero, since `min` over no rows returns a default value.
+    pub async fn query_stats(&self, sql: &str) -> Result<spectra_core::StorageStats> {
+        let rows = self.query_strings(sql).await?;
+        let Some((count, first, last)) = rows.into_iter().next() else {
+            return Ok(spectra_core::StorageStats::default());
+        };
+        let rows: u64 = count
+            .trim()
+            .parse()
+            .map_err(|e| Error::internal(format!("invalid remote row count {count:?}: {e}")))?;
+        if rows == 0 {
+            return Ok(spectra_core::StorageStats::default());
+        }
+        Ok(spectra_core::StorageStats {
+            rows,
+            first_ts: Some(parse_rfc3339_ts(&first)?),
+            last_ts: Some(parse_rfc3339_ts(&last)?),
+        })
+    }
+
     /// Fetch metric rows `(value, labels_json, ts)`.
     #[tracing::instrument(name = "spectra.remote.query_metric_rows", skip_all, fields(sql_len = sql.len()))]
     pub async fn query_metric_rows(&self, sql: &str) -> Result<Vec<(f64, String, String)>> {

@@ -5,7 +5,7 @@ use parking_lot::RwLock;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use spectra_core::{
-    EventRow, EventsQueryFilter, LabelMatcher, MetricPoint, MetricsQueryRange, Result,
+    EventRow, EventsQueryFilter, LabelMatcher, MetricPoint, MetricsQueryRange, Result, StorageStats,
 };
 
 #[derive(Default)]
@@ -81,6 +81,26 @@ impl MemStore {
             .collect())
     }
 
+    pub fn metric_stats(&self, name: &str) -> StorageStats {
+        stats_of(
+            self.metrics
+                .read()
+                .iter()
+                .filter(|m| m.name == name)
+                .map(|m| m.ts),
+        )
+    }
+
+    pub fn event_stats(&self, table: &str) -> StorageStats {
+        stats_of(
+            self.events
+                .read()
+                .iter()
+                .filter(|e| e.table == table)
+                .map(|e| e.ts),
+        )
+    }
+
     pub fn append_row(&self, table: &str, fields: &Value, ts: DateTime<Utc>) -> Result<()> {
         self.events.write().push(StoredEvent {
             table: table.to_string(),
@@ -104,6 +124,16 @@ impl MemStore {
             .collect();
         Ok(spectra_core::finalize_event_rows(out, &filter))
     }
+}
+
+fn stats_of(timestamps: impl Iterator<Item = DateTime<Utc>>) -> StorageStats {
+    let mut stats = StorageStats::default();
+    for ts in timestamps {
+        stats.rows += 1;
+        stats.first_ts = Some(stats.first_ts.map_or(ts, |t| t.min(ts)));
+        stats.last_ts = Some(stats.last_ts.map_or(ts, |t| t.max(ts)));
+    }
+    stats
 }
 
 fn labels_match(labels: &Value, matchers: &[LabelMatcher]) -> bool {

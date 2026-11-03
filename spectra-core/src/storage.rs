@@ -217,6 +217,19 @@ pub struct EventWriteRow {
     pub correlation_id: Option<String>,
 }
 
+/// Row count and time range for one event table or metric family.
+///
+/// An empty or unknown table or metric reports zero rows and no timestamps.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StorageStats {
+    /// Number of stored rows (events) or samples (metrics).
+    pub rows: u64,
+    /// Earliest stored timestamp, `None` when there are no rows.
+    pub first_ts: Option<DateTime<Utc>>,
+    /// Latest stored timestamp, `None` when there are no rows.
+    pub last_ts: Option<DateTime<Utc>>,
+}
+
 /// Metrics storage: subscribers call `record_*`; explore UI calls `query_range`.
 #[async_trait]
 pub trait MetricsStorageBackend: Send + Sync {
@@ -244,6 +257,17 @@ pub trait MetricsStorageBackend: Send + Sync {
     /// Queries a time range of metric points.
     async fn query_range(&self, _query: MetricsQueryRange) -> Result<Vec<MetricPoint>> {
         Ok(Vec::new())
+    }
+
+    /// Returns the sample count and time range stored for one metric family.
+    ///
+    /// The default reports no data, so partial backends keep compiling.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the backing store cannot be read.
+    async fn metric_stats(&self, _name: &str) -> Result<StorageStats> {
+        Ok(StorageStats::default())
     }
 
     /// Batch write metrics (default: per-row dispatch).
@@ -292,6 +316,17 @@ pub trait EventStorageBackend: Send + Sync {
             series: Vec::new(),
             headline: Vec::new(),
         })
+    }
+
+    /// Returns the row count and time range stored for one event table.
+    ///
+    /// The default reports no data, so partial backends keep compiling.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the backing store cannot be read.
+    async fn event_stats(&self, _table: &str) -> Result<StorageStats> {
+        Ok(StorageStats::default())
     }
 
     /// Batch append event rows (default: per-row dispatch).

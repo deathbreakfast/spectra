@@ -6,7 +6,7 @@ use serde_json::Value;
 use spectra_backend_remote_common::RemoteEventsBackend;
 use spectra_core::{
     EventAggregateResult, EventRow, EventStorageBackend, EventWriteRow, EventsAggregateFilter,
-    EventsQueryFilter, Result, StorageEngineType,
+    EventsQueryFilter, Result, StorageEngineType, StorageStats,
 };
 
 /// Scale-out TensorBase structured-event storage over its ClickHouse-compatible protocol.
@@ -165,6 +165,10 @@ impl EventStorageBackend for TensorBaseEventsBackend {
 
     async fn query_rows(&self, filter: EventsQueryFilter) -> Result<Vec<EventRow>> {
         self.0.query_rows(filter).await
+    }
+
+    async fn event_stats(&self, table: &str) -> Result<StorageStats> {
+        self.0.event_stats(table).await
     }
 
     async fn query_aggregate(&self, filter: EventsAggregateFilter) -> Result<EventAggregateResult> {

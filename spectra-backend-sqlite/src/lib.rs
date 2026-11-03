@@ -20,7 +20,7 @@ use serde_json::Value;
 use spectra_core::{
     aggregate_event_rows, Error, EventAggregateResult, EventRow, EventStorageBackend,
     EventsAggregateFilter, EventsQueryFilter, LabelMatcher, MetricPoint, MetricsQueryRange,
-    MetricsStorageBackend, Result, StorageEngineType,
+    MetricsStorageBackend, Result, StorageEngineType, StorageStats,
 };
 
 const METRICS_DDL: &str = r"
@@ -65,6 +65,22 @@ fn open_and_migrate(path: &Path, ddl: &str) -> Result<Connection> {
 
 fn ts_to_rfc3339(ts: DateTime<Utc>) -> String {
     ts.to_rfc3339()
+}
+
+/// Runs a `COUNT(*), MIN(ts), MAX(ts)` query with one bound parameter.
+fn query_stats(conn: &Connection, sql: &str, key: &str) -> Result<StorageStats> {
+    let (rows, first, last): (i64, Option<String>, Option<String>) = conn
+        .query_row(sql, params![key], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })
+        .map_err(map_sqlite)?;
+    let rows = u64::try_from(rows)
+        .map_err(|e| Error::internal(format!("invalid sqlite row count {rows}: {e}")))?;
+    Ok(StorageStats {
+        rows,
+        first_ts: first.as_deref().map(parse_ts).transpose()?,
+        last_ts: last.as_deref().map(parse_ts).transpose()?,
+    })
 }
 
 fn parse_ts(s: &str) -> Result<DateTime<Utc>> {
@@ -171,6 +187,21 @@ impl SqliteMetricsBackend {
 impl MetricsStorageBackend for SqliteMetricsBackend {
     fn engine_type(&self) -> StorageEngineType {
         StorageEngineType::Sqlite
+    }
+
+    async fn metric_stats(&self, name: &str) -> Result<StorageStats> {
+        let conn = Arc::clone(&self.conn);
+        let name = name.to_string();
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.lock();
+            query_stats(
+                &conn,
+                "SELECT COUNT(*), MIN(ts), MAX(ts) FROM spectra_metrics WHERE name = ?1",
+                &name,
+            )
+        })
+        .await
+        .map_err(map_join)?
     }
 
     #[tracing::instrument(
@@ -362,6 +393,21 @@ impl SqliteEventsBackend {
 impl EventStorageBackend for SqliteEventsBackend {
     fn engine_type(&self) -> StorageEngineType {
         StorageEngineType::Sqlite
+    }
+
+    async fn event_stats(&self, table: &str) -> Result<StorageStats> {
+        let conn = Arc::clone(&self.conn);
+        let table = table.to_string();
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.lock();
+            query_stats(
+                &conn,
+                "SELECT COUNT(*), MIN(ts), MAX(ts) FROM spectra_events WHERE table_name = ?1",
+                &table,
+            )
+        })
+        .await
+        .map_err(map_join)?
     }
 
     #[tracing::instrument(
