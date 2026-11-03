@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use spectra_core::{
     MetricPoint, MetricWriteRow, MetricsQueryRange, MetricsStorageBackend, Result,
-    StorageEngineType,
+    StorageEngineType, StorageStats,
 };
 
 use crate::client::{
@@ -137,6 +137,21 @@ impl MetricsStorageBackend for RemoteMetricsBackend {
                     .map_err(map_remote)?;
                 insert.end().await.map_err(map_remote)?;
                 Ok(())
+            }
+        }
+    }
+
+    async fn metric_stats(&self, name: &str) -> Result<StorageStats> {
+        spectra_core::validate_spectra_ident(name)?;
+        match &self.inner {
+            MetricsInner::Mem(store) => Ok(store.metric_stats(name)),
+            MetricsInner::Remote(client) => {
+                let sql = format!(
+                    "SELECT toString(count()), toString(min(ts)), toString(max(ts)) \
+                     FROM spectra_metrics WHERE name = '{}'",
+                    query_sql::escape_str(name)?
+                );
+                client.query_stats(&sql).await
             }
         }
     }

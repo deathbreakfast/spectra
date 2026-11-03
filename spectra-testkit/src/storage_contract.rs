@@ -8,7 +8,7 @@ use spectra::spectra_core::LabelMatcher;
 use spectra::spectra_core::{
     EventAggregateResult, EventExploreView, EventMeasure, EventStorageBackend,
     EventsAggregateFilter, EventsQueryFilter, GridFilterItem, GridFilterModel, GridFilterOperator,
-    MetricsQueryRange, MetricsStorageBackend, Result,
+    MetricsQueryRange, MetricsStorageBackend, Result, StorageStats,
 };
 
 /// Run the shared storage port contract against one metrics/events backend pair.
@@ -24,6 +24,8 @@ pub async fn run_storage_contract(
     event_sort_and_pagination(events.as_ref()).await?;
     event_partition_filter(events.as_ref()).await?;
     event_aggregate_views(events.as_ref()).await?;
+    event_stats_roundtrip(events.as_ref()).await?;
+    metric_stats_roundtrip(metrics.as_ref()).await?;
     label_filter_hit(metrics.as_ref()).await?;
     label_filter_miss(metrics.as_ref()).await?;
     time_range_empty(metrics.as_ref()).await?;
@@ -425,4 +427,67 @@ fn slices(result: &EventAggregateResult) -> Vec<(String, f64)> {
         }
         other => panic!("expected slices, got {other:?}"),
     }
+}
+
+async fn event_stats_roundtrip(events: &dyn EventStorageBackend) -> Result<()> {
+    let missing = events.event_stats("contract_stats_missing").await?;
+    assert_eq!(missing, StorageStats::default(), "unknown table is empty");
+
+    let base = Utc::now();
+    let table = "contract_stats_events";
+    // Written out of order so min/max cannot just be first/last insert.
+    let times = [
+        base + Duration::seconds(5),
+        base,
+        base + Duration::seconds(10),
+    ];
+    for ts in times {
+        events.append_row(table, &json!({"n": 1}), ts, None).await?;
+    }
+    events
+        .append_row(
+            "contract_stats_other",
+            &json!({}),
+            base - Duration::hours(1),
+            None,
+        )
+        .await?;
+    let stats = events.event_stats(table).await?;
+    assert_eq!(stats.rows, 3, "event stats row count");
+    assert_eq!(stats.first_ts, Some(base), "event stats first_ts");
+    assert_eq!(
+        stats.last_ts,
+        Some(base + Duration::seconds(10)),
+        "event stats last_ts"
+    );
+    Ok(())
+}
+
+async fn metric_stats_roundtrip(metrics: &dyn MetricsStorageBackend) -> Result<()> {
+    let missing = metrics.metric_stats("contract_stats_missing").await?;
+    assert_eq!(missing, StorageStats::default(), "unknown metric is empty");
+
+    let base = Utc::now();
+    let name = "contract_stats_metric";
+    metrics
+        .record_counter(name, &json!({}), 1, base + Duration::seconds(7))
+        .await?;
+    metrics.record_gauge(name, &json!({}), 2.0, base).await?;
+    metrics
+        .record_counter(
+            "contract_stats_other_metric",
+            &json!({}),
+            1,
+            base - Duration::hours(1),
+        )
+        .await?;
+    let stats = metrics.metric_stats(name).await?;
+    assert_eq!(stats.rows, 2, "metric stats row count");
+    assert_eq!(stats.first_ts, Some(base), "metric stats first_ts");
+    assert_eq!(
+        stats.last_ts,
+        Some(base + Duration::seconds(7)),
+        "metric stats last_ts"
+    );
+    Ok(())
 }

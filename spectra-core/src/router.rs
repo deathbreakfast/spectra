@@ -135,6 +135,28 @@ impl SpectraRouter {
         backend.query_range(query).await
     }
 
+    /// Returns row count and time range for an event table through the resolved backend.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::Config`] when the table name is not a valid Spectra identifier,
+    /// or the backend's error when it cannot be read.
+    pub async fn event_stats(&self, table: &str) -> Result<crate::storage::StorageStats> {
+        crate::validate_spectra_ident(table)?;
+        self.resolve_event(table).event_stats(table).await
+    }
+
+    /// Returns sample count and time range for a metric family through the resolved backend.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::Config`] when the metric name is not a valid Spectra identifier,
+    /// or the backend's error when it cannot be read.
+    pub async fn metric_stats(&self, name: &str) -> Result<crate::storage::StorageStats> {
+        crate::validate_spectra_ident(name)?;
+        self.resolve_metrics(name).metric_stats(name).await
+    }
+
     /// Queries aggregated chart data through the resolved backend.
     pub async fn query_event_aggregate(
         &self,
@@ -240,6 +262,18 @@ mod tests {
             }))
             .expect("query");
         assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn router_stats_default_empty_and_validated() {
+        let router = SpectraRouter::new();
+        let rt = tokio::runtime::Runtime::new().expect("runtime");
+        let stats = rt.block_on(router.event_stats("missing")).expect("stats");
+        assert_eq!(stats, crate::storage::StorageStats::default());
+        let stats = rt.block_on(router.metric_stats("missing")).expect("stats");
+        assert_eq!(stats.rows, 0);
+        assert!(rt.block_on(router.event_stats("bad name;")).is_err());
+        assert!(rt.block_on(router.metric_stats("bad name;")).is_err());
     }
 
     #[test]

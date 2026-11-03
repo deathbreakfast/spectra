@@ -18,7 +18,7 @@ use serde_json::Value;
 use spectra_core::{
     aggregate_event_rows, EventAggregateResult, EventRow, EventStorageBackend,
     EventsAggregateFilter, EventsQueryFilter, LabelMatcher, MetricPoint, MetricsQueryRange,
-    MetricsStorageBackend, Result, StorageEngineType,
+    MetricsStorageBackend, Result, StorageEngineType, StorageStats,
 };
 
 /// Non-durable in-memory metrics storage.
@@ -152,6 +152,17 @@ impl MetricsStorageBackend for MemMetricsBackend {
             })
             .collect())
     }
+
+    async fn metric_stats(&self, name: &str) -> Result<StorageStats> {
+        let guard = self.points.read();
+        let mut stats = StorageStats::default();
+        for p in guard.iter().filter(|p| p.name == name) {
+            stats.rows += 1;
+            stats.first_ts = Some(stats.first_ts.map_or(p.ts, |t| t.min(p.ts)));
+            stats.last_ts = Some(stats.last_ts.map_or(p.ts, |t| t.max(p.ts)));
+        }
+        Ok(stats)
+    }
 }
 
 /// Non-durable in-memory structured-event storage keyed by logical table name.
@@ -269,6 +280,18 @@ impl EventStorageBackend for MemEventsBackend {
             })
             .collect();
         Ok(spectra_core::finalize_event_rows(out, &filter))
+    }
+
+    async fn event_stats(&self, table: &str) -> Result<StorageStats> {
+        let guard = self.rows.read();
+        let Some(rows) = guard.get(table) else {
+            return Ok(StorageStats::default());
+        };
+        Ok(StorageStats {
+            rows: rows.len() as u64,
+            first_ts: rows.iter().map(|r| r.ts).min(),
+            last_ts: rows.iter().map(|r| r.ts).max(),
+        })
     }
 
     async fn query_aggregate(&self, filter: EventsAggregateFilter) -> Result<EventAggregateResult> {
