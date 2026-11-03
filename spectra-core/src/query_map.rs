@@ -55,8 +55,19 @@ pub fn aggregate_request_to_filter(req: &EventAggregateRequest) -> EventsAggrega
 }
 
 /// Maps storage event rows into a UI event query result.
+///
+/// Fields the registered schema classifies as PII are replaced with [`crate::PII_MASK`]
+/// (see [`crate::mask_pii_fields`]). Rows for a table with no registered schema pass through
+/// unchanged, since there is no classification to apply.
 pub fn rows_to_event_result(table: &str, rows: Vec<EventRow>, row_count: u64) -> EventQueryResult {
-    let meta = SchemaRegistry::global().get_schema(table);
+    event_result_with_schema(SchemaRegistry::global().get_schema(table), rows, row_count)
+}
+
+fn event_result_with_schema(
+    meta: Option<&SchemaMetadata>,
+    rows: Vec<EventRow>,
+    row_count: u64,
+) -> EventQueryResult {
     let columns = meta.map(schema_columns).unwrap_or_else(|| {
         vec![GridColumnDto {
             field: "ts".into(),
@@ -76,7 +87,10 @@ pub fn rows_to_event_result(table: &str, rows: Vec<EventRow>, row_count: u64) ->
             EventGridRow {
                 id,
                 ts: r.ts,
-                fields: r.fields,
+                fields: match meta {
+                    Some(m) => crate::mask_pii_fields(r.fields, m),
+                    None => r.fields,
+                },
             }
         })
         .collect();
@@ -961,5 +975,52 @@ mod aggregate_event_rows_tests {
             }
             other => panic!("expected empty pivot: {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod event_result_masking_tests {
+    use super::*;
+    use crate::classification::{FieldClassification, PII_MASK};
+    use crate::registry::SchemaFieldMetadata;
+
+    fn meta() -> SchemaMetadata {
+        let field = |name: &str, pii: bool| SchemaFieldMetadata {
+            name: name.to_string(),
+            rust_type: "String".to_string(),
+            classification: FieldClassification {
+                pii,
+                safe_for_console: true,
+                retention_days: None,
+                purpose: None,
+            },
+        };
+        SchemaMetadata {
+            table_or_metric: "t".into(),
+            fields: vec![field("email", true), field("region", false)],
+            ..SchemaMetadata::default()
+        }
+    }
+
+    fn row() -> EventRow {
+        EventRow {
+            ts: Utc::now(),
+            fields: json!({"id": "r1", "email": "a@b.c", "region": "us"}),
+        }
+    }
+
+    #[test]
+    fn registered_schema_masks_pii_and_keeps_row_id() {
+        let m = meta();
+        let out = event_result_with_schema(Some(&m), vec![row()], 1);
+        assert_eq!(out.rows[0].id, "r1");
+        assert_eq!(out.rows[0].fields["email"], PII_MASK);
+        assert_eq!(out.rows[0].fields["region"], "us");
+    }
+
+    #[test]
+    fn unregistered_table_passes_through() {
+        let out = event_result_with_schema(None, vec![row()], 1);
+        assert_eq!(out.rows[0].fields["email"], "a@b.c");
     }
 }

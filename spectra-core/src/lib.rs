@@ -13,7 +13,7 @@
 //! - **Input validation** — [`validate_spectra_ident`] for metric/table/field tokens;
 //!   [`clamp_event_paging`] bounds event query `limit`/`offset`.
 //! - **Field classification** — [`FieldClassification`] plus [`mask_field_value`] for host/UI
-//!   display (PII / console safety). Query authz remains a host concern.
+//!   display (PII / console safety); [`rows_to_event_result`] masks PII fields itself. Query authz remains a host concern.
 //!
 //! # Entry points
 //!
@@ -22,7 +22,7 @@
 //! | Wire sink | [`set_sink`] |
 //! | Emit | [`try_record_counter`], [`try_log_event`], … |
 //! | Gate | [`install_config`], [`SpectraConfig::from_env`] |
-//! | Mask PII | [`mask_field_value`] |
+//! | Mask PII | [`mask_field_value`], [`mask_pii_fields`] |
 //! | Validate names | [`validate_spectra_ident`] |
 //! | Page bounds | [`clamp_event_paging`], [`MAX_EVENT_QUERY_LIMIT`] |
 //!
@@ -60,7 +60,7 @@ mod topic;
 mod types;
 mod validate;
 
-pub use classification::{mask_field_value, FieldClassification, PII_MASK};
+pub use classification::{mask_field_value, mask_pii_fields, FieldClassification, PII_MASK};
 pub use config::{install_config, EmitPolicy, NameOverride, SpectraConfig};
 pub use emit_buffer::{
     current_emit_ts, drain, is_active, job_enabled, request_enabled, request_scope, with_emit_ts,
