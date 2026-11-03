@@ -18,7 +18,7 @@ use serde_json::Value;
 use spectra_core::{
     aggregate_event_rows, EventAggregateResult, EventRow, EventStorageBackend,
     EventsAggregateFilter, EventsQueryFilter, LabelMatcher, MetricPoint, MetricsQueryRange,
-    MetricsStorageBackend, Result, StorageEngineType, StorageStats,
+    MetricsStorageBackend, PruneOutcome, Result, StorageEngineType, StorageStats,
 };
 
 /// Non-durable in-memory metrics storage.
@@ -163,6 +163,35 @@ impl MetricsStorageBackend for MemMetricsBackend {
         }
         Ok(stats)
     }
+
+    async fn prune_before(&self, before: DateTime<Utc>, max_rows: u32) -> Result<PruneOutcome> {
+        let mut guard = self.points.write();
+        let deleted = drain_oldest(&mut guard, max_rows, |p| p.ts, before);
+        Ok(PruneOutcome::capped(deleted, max_rows))
+    }
+}
+
+/// Removes up to `max_rows` entries with `ts < before`, oldest first; returns the count.
+fn drain_oldest<T>(
+    rows: &mut Vec<T>,
+    max_rows: u32,
+    ts_of: impl Fn(&T) -> DateTime<Utc>,
+    before: DateTime<Utc>,
+) -> u64 {
+    let mut stale: Vec<(DateTime<Utc>, usize)> = rows
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| ts_of(r) < before)
+        .map(|(i, r)| (ts_of(r), i))
+        .collect();
+    stale.sort();
+    stale.truncate(max_rows as usize);
+    let mut idx: Vec<usize> = stale.into_iter().map(|(_, i)| i).collect();
+    idx.sort_unstable_by(|a, b| b.cmp(a));
+    for i in &idx {
+        rows.remove(*i);
+    }
+    idx.len() as u64
 }
 
 /// Non-durable in-memory structured-event storage keyed by logical table name.
@@ -319,6 +348,20 @@ impl EventStorageBackend for MemEventsBackend {
             )
         };
         Ok(aggregate_event_rows(filter.view, &filter, &rows))
+    }
+
+    async fn prune_before(
+        &self,
+        table: &str,
+        before: DateTime<Utc>,
+        max_rows: u32,
+    ) -> Result<PruneOutcome> {
+        let mut guard = self.rows.write();
+        let Some(rows) = guard.get_mut(table) else {
+            return Ok(PruneOutcome::default());
+        };
+        let deleted = drain_oldest(rows, max_rows, |r| r.ts, before);
+        Ok(PruneOutcome::capped(deleted, max_rows))
     }
 }
 

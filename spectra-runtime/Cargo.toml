@@ -20,7 +20,7 @@ telemetry-console = []
 
 [dev-dependencies]
 spectra-backend-mem = { workspace = true }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "test-util"] }
 
 [lints]
 workspace = true

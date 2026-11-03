@@ -20,7 +20,7 @@ use serde_json::Value;
 use spectra_core::{
     aggregate_event_rows, Error, EventAggregateResult, EventRow, EventStorageBackend,
     EventsAggregateFilter, EventsQueryFilter, LabelMatcher, MetricPoint, MetricsQueryRange,
-    MetricsStorageBackend, Result, StorageEngineType, StorageStats,
+    MetricsStorageBackend, PruneOutcome, Result, StorageEngineType, StorageStats,
 };
 
 const METRICS_DDL: &str = r"
@@ -199,6 +199,25 @@ impl MetricsStorageBackend for SqliteMetricsBackend {
                 "SELECT COUNT(*), MIN(ts), MAX(ts) FROM spectra_metrics WHERE name = ?1",
                 &name,
             )
+        })
+        .await
+        .map_err(map_join)?
+    }
+
+    #[tracing::instrument(name = "spectra.sqlite.prune_before", skip(self))]
+    async fn prune_before(&self, before: DateTime<Utc>, max_rows: u32) -> Result<PruneOutcome> {
+        let conn = Arc::clone(&self.conn);
+        let before = ts_to_rfc3339(before);
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.lock();
+            let deleted = conn
+                .execute(
+                    "DELETE FROM spectra_metrics WHERE rowid IN \
+                     (SELECT rowid FROM spectra_metrics WHERE ts < ?1 ORDER BY ts LIMIT ?2)",
+                    params![before, max_rows],
+                )
+                .map_err(map_sqlite)?;
+            Ok(PruneOutcome::capped(deleted as u64, max_rows))
         })
         .await
         .map_err(map_join)?
@@ -439,6 +458,32 @@ impl EventStorageBackend for SqliteEventsBackend {
                 "SELECT COUNT(*), MIN(ts), MAX(ts) FROM spectra_events WHERE table_name = ?1",
                 &table,
             )
+        })
+        .await
+        .map_err(map_join)?
+    }
+
+    #[tracing::instrument(name = "spectra.sqlite.prune_before", skip(self))]
+    async fn prune_before(
+        &self,
+        table: &str,
+        before: DateTime<Utc>,
+        max_rows: u32,
+    ) -> Result<PruneOutcome> {
+        let conn = Arc::clone(&self.conn);
+        let table = table.to_string();
+        let before = ts_to_rfc3339(before);
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.lock();
+            let deleted = conn
+                .execute(
+                    "DELETE FROM spectra_events WHERE rowid IN \
+                     (SELECT rowid FROM spectra_events \
+                      WHERE table_name = ?1 AND ts < ?2 ORDER BY ts LIMIT ?3)",
+                    params![table, before, max_rows],
+                )
+                .map_err(map_sqlite)?;
+            Ok(PruneOutcome::capped(deleted as u64, max_rows))
         })
         .await
         .map_err(map_join)?

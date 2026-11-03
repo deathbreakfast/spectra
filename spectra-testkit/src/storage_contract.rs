@@ -8,7 +8,7 @@ use spectra::spectra_core::LabelMatcher;
 use spectra::spectra_core::{
     EventAggregateResult, EventExploreView, EventMeasure, EventStorageBackend,
     EventsAggregateFilter, EventsQueryFilter, GridFilterItem, GridFilterModel, GridFilterOperator,
-    MetricsQueryRange, MetricsStorageBackend, Result, StorageStats,
+    MetricsQueryRange, MetricsStorageBackend, Result, StorageEngineType, StorageStats,
 };
 
 /// Run the shared storage port contract against one metrics/events backend pair.
@@ -29,6 +29,20 @@ pub async fn run_storage_contract(
     label_filter_hit(metrics.as_ref()).await?;
     label_filter_miss(metrics.as_ref()).await?;
     time_range_empty(metrics.as_ref()).await?;
+    // Remote engines prune with an asynchronous, uncapped mutation, so only the embedded
+    // engines can assert exact bounded results here.
+    if matches!(
+        events.engine_type(),
+        StorageEngineType::Mem | StorageEngineType::Sqlite
+    ) {
+        event_prune(events.as_ref()).await?;
+    }
+    if matches!(
+        metrics.engine_type(),
+        StorageEngineType::Mem | StorageEngineType::Sqlite
+    ) {
+        metrics_prune(metrics.as_ref()).await?;
+    }
     Ok(())
 }
 
@@ -493,5 +507,62 @@ async fn metric_stats_roundtrip(metrics: &dyn MetricsStorageBackend) -> Result<(
         Some(base + Duration::seconds(7)),
         "metric stats last_ts"
     );
+    Ok(())
+}
+
+async fn event_prune(events: &dyn EventStorageBackend) -> Result<()> {
+    let now = Utc::now();
+    let old = now - Duration::days(10);
+    let cutoff = now - Duration::days(1);
+    for _ in 0..3 {
+        events
+            .append_row("contract_prune", &json!({"age": "old"}), old, None)
+            .await?;
+    }
+    events
+        .append_row("contract_prune", &json!({"age": "new"}), now, None)
+        .await?;
+    events
+        .append_row("contract_prune_other", &json!({"age": "old"}), old, None)
+        .await?;
+
+    let first = events.prune_before("contract_prune", cutoff, 2).await?;
+    assert_eq!((first.deleted, first.more), (2, true), "capped prune");
+    let second = events.prune_before("contract_prune", cutoff, 2).await?;
+    assert_eq!((second.deleted, second.more), (1, false), "final prune");
+
+    let rows = |table: &str| EventsQueryFilter {
+        table: table.into(),
+        start: Some(old - Duration::days(1)),
+        end: Some(now + Duration::seconds(1)),
+        ..Default::default()
+    };
+    let kept = events.query_rows(rows("contract_prune")).await?;
+    assert_eq!(kept.len(), 1, "recent row survives prune");
+    let other = events.query_rows(rows("contract_prune_other")).await?;
+    assert_eq!(other.len(), 1, "other table untouched");
+    Ok(())
+}
+
+async fn metrics_prune(metrics: &dyn MetricsStorageBackend) -> Result<()> {
+    let now = Utc::now();
+    let old = now - Duration::days(10);
+    metrics
+        .record_counter("contract_prune_hits", &json!({}), 1, old)
+        .await?;
+    metrics
+        .record_counter("contract_prune_hits", &json!({}), 1, now)
+        .await?;
+    let outcome = metrics.prune_before(now - Duration::days(1), 100).await?;
+    assert!(outcome.deleted >= 1 && !outcome.more, "metrics prune");
+    let points = metrics
+        .query_range(MetricsQueryRange {
+            metric_name: "contract_prune_hits".into(),
+            start: old - Duration::days(1),
+            end: now + Duration::seconds(1),
+            label_matchers: vec![],
+        })
+        .await?;
+    assert_eq!(points.len(), 1, "recent metric survives prune");
     Ok(())
 }

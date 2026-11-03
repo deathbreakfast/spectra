@@ -8,7 +8,8 @@ use serde_json::{json, Value};
 use spectra_core::{
     aggregate_event_rows, aggregate_rows_to_result, pivot_from_cells, Error, EventAggregateResult,
     EventExploreView, EventRow, EventStorageBackend, EventWriteRow, EventsAggregateFilter,
-    EventsQueryFilter, PivotCell, Result, StorageEngineType, StorageStats, PIVOT_BLANK_LABEL,
+    EventsQueryFilter, PivotCell, PruneOutcome, Result, StorageEngineType, StorageStats,
+    PIVOT_BLANK_LABEL,
 };
 
 use crate::client::{
@@ -134,6 +135,34 @@ impl EventStorageBackend for RemoteEventsBackend {
                 }
                 insert.end().await.map_err(map_remote)?;
                 Ok(())
+            }
+        }
+    }
+
+    async fn prune_before(
+        &self,
+        table: &str,
+        before: DateTime<Utc>,
+        max_rows: u32,
+    ) -> Result<PruneOutcome> {
+        match &self.inner {
+            EventsInner::Mem(store) => Ok(PruneOutcome::capped(
+                store.prune_events(table, before, max_rows),
+                max_rows,
+            )),
+            EventsInner::Remote(client) => {
+                spectra_core::validate_spectra_ident(table)?;
+                // A ClickHouse mutation has no row cap and reports no count, so `max_rows`
+                // does not apply here; the time bound is the only limit.
+                let table = query_sql::escape_str(table)?;
+                let cutoff = query_sql::escape_str(&datetime_to_ch_ts(before))?;
+                client
+                    .execute(&format!(
+                        "ALTER TABLE spectra_events DELETE \
+                         WHERE table_name = '{table}' AND ts < '{cutoff}'"
+                    ))
+                    .await?;
+                Ok(PruneOutcome::default())
             }
         }
     }

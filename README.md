@@ -135,6 +135,30 @@ API details: [`spectra/README.md`](spectra/README.md) and `cargo doc -p uf-spect
 [Publish-consume](https://docs.rs/uf-spectra/latest/spectra/index.html#publish-consume-two-binaries) /
 [Dual-path](https://docs.rs/uf-spectra/latest/spectra/index.html#dual-path-optional)).
 
+## Retention
+
+Stores grow until something deletes from them. Pass a `RetentionConfig` to the builder to
+prune on a schedule:
+
+```rust
+Spectra::builder()
+    // ... backends ...
+    .retention(RetentionConfig {
+        metrics_days: Some(30),
+        default_event_days: Some(14),
+        table_days: [("audit_log".to_string(), 90)].into(),
+        ..Default::default()
+    })
+```
+
+Pruning is off unless you set it. Each run deletes in batches of `batch_rows` (5000), at most
+`max_batches` (20) per store and table, so a store that is far behind catches up over
+several runs. The mem and SQLite backends enforce the row cap exactly. ClickHouse and
+TensorBase issue one `ALTER TABLE ... DELETE` per run, which has no row cap and finishes in
+the background. `FieldClassification::retention_days` is metadata only; retention comes from
+`RetentionConfig`. If your host has its own scheduler, build a `RetentionPruner` and call
+`prune_once` from a job instead of using the builder.
+
 ## Logging surfaces
 
 | Surface | What it is | Topic / path |
