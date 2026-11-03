@@ -318,8 +318,12 @@ async fn event_aggregate_views(events: &dyn EventStorageBackend) -> Result<()> {
     let pie = events.query_aggregate(by_severity.clone()).await?;
     assert_eq!(
         slices(&pie),
-        vec![("info".to_string(), 2.0), ("warn".to_string(), 1.0)],
-        "aggregate pie count excludes rows without the group field"
+        vec![
+            ("(blank)".to_string(), 1.0),
+            ("info".to_string(), 2.0),
+            ("warn".to_string(), 1.0)
+        ],
+        "aggregate pie count buckets rows without the group field as (blank)"
     );
 
     let bar = events
