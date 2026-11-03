@@ -306,6 +306,175 @@ impl ScenarioSpec {
             }],
         }
     }
+
+    /// Two label sets of one counter stay separate; an unfiltered query sees both (happy path).
+    pub fn label_sets_isolated() -> Self {
+        let region = |v: &str| vec![("region".to_string(), v.to_string())];
+        let name = "label_sets_counter".to_string();
+        Self {
+            id: "label-sets-isolated".to_string(),
+            steps: vec![
+                ScenarioStep::EmitCounter {
+                    name: name.clone(),
+                    labels: region("us-west"),
+                    delta: 1,
+                },
+                ScenarioStep::EmitCounter {
+                    name: name.clone(),
+                    labels: region("eu-central"),
+                    delta: 1,
+                },
+                ScenarioStep::WaitUntilMetricCount {
+                    name: name.clone(),
+                    labels: vec![],
+                    expected: 2,
+                    timeout_ms: DEFAULT_VISIBILITY_TIMEOUT_MS,
+                },
+                ScenarioStep::AssertMetricCountWithLabels {
+                    name: name.clone(),
+                    labels: region("us-west"),
+                    expected: 1,
+                },
+                ScenarioStep::AssertMetricCountWithLabels {
+                    name,
+                    labels: region("eu-central"),
+                    expected: 1,
+                },
+            ],
+        }
+    }
+
+    /// Gauges on two shards filter independently (happy path).
+    pub fn gauge_shard_filter() -> Self {
+        let shard = |v: &str| vec![("shard".to_string(), v.to_string())];
+        let name = "gauge_shard_depth".to_string();
+        Self {
+            id: "gauge-shard-filter".to_string(),
+            steps: vec![
+                ScenarioStep::EmitGauge {
+                    name: name.clone(),
+                    labels: shard("0"),
+                    value: 1.0,
+                },
+                ScenarioStep::EmitGauge {
+                    name: name.clone(),
+                    labels: shard("1"),
+                    value: 2.0,
+                },
+                ScenarioStep::WaitUntilMetricCount {
+                    name: name.clone(),
+                    labels: vec![],
+                    expected: 2,
+                    timeout_ms: DEFAULT_VISIBILITY_TIMEOUT_MS,
+                },
+                ScenarioStep::AssertMetricCountWithLabels {
+                    name: name.clone(),
+                    labels: shard("1"),
+                    expected: 1,
+                },
+                ScenarioStep::AssertMetricCountWithLabels {
+                    name,
+                    labels: shard("9"),
+                    expected: 0,
+                },
+            ],
+        }
+    }
+
+    /// Emitting one metric name leaves a different metric name empty (sad path).
+    pub fn metric_name_isolation() -> Self {
+        Self {
+            id: "metric-name-isolation".to_string(),
+            steps: vec![
+                ScenarioStep::EmitCounter {
+                    name: "isolation_emitted".to_string(),
+                    labels: vec![],
+                    delta: 1,
+                },
+                ScenarioStep::WaitUntilMetricCount {
+                    name: "isolation_emitted".to_string(),
+                    labels: vec![],
+                    expected: 1,
+                    timeout_ms: DEFAULT_VISIBILITY_TIMEOUT_MS,
+                },
+                ScenarioStep::AssertMetricCount {
+                    name: "isolation_other".to_string(),
+                    expected: 0,
+                },
+            ],
+        }
+    }
+
+    /// Several events persist and a small limit caps the page (happy path).
+    pub fn event_multi_row_small_limit() -> Self {
+        let events = ["multi-a", "multi-b", "multi-c"].map(|m| ScenarioStep::EmitSmokeEvent {
+            message: m.to_string(),
+        });
+        let mut steps = events.to_vec();
+        steps.push(ScenarioStep::WaitUntilEventCount {
+            table: "platform_smoke_event".to_string(),
+            expected: 3,
+            timeout_ms: DEFAULT_VISIBILITY_TIMEOUT_MS,
+        });
+        steps.push(ScenarioStep::AssertEventCountWithLimit {
+            table: "platform_smoke_event".to_string(),
+            limit: 2,
+            max_rows: 2,
+        });
+        Self {
+            id: "event-multi-row-small-limit".to_string(),
+            steps,
+        }
+    }
+
+    /// An event table with no rows counts zero (sad path).
+    pub fn event_table_empty() -> Self {
+        Self {
+            id: "event-table-empty".to_string(),
+            steps: vec![ScenarioStep::AssertEventCount {
+                table: "platform_smoke_event".to_string(),
+                expected: 0,
+            }],
+        }
+    }
+
+    /// Quote- and whitespace-shaped filter fields are rejected (sad path).
+    pub fn query_reject_quoted_filter_field() -> Self {
+        Self {
+            id: "query-reject-quoted-filter-field".to_string(),
+            steps: ["msg' OR '1'='1", "msg message", "msg--"]
+                .into_iter()
+                .map(|bad| ScenarioStep::QueryEventsExpectInvalidFilter {
+                    table: "platform_smoke_event".to_string(),
+                    bad_field: bad.to_string(),
+                })
+                .collect(),
+        }
+    }
+
+    /// A global `error` min level drops a debug-tier counter (sad path).
+    pub fn gate_min_level_error_drops_info() -> Self {
+        Self {
+            id: "gate-min-level-error-drops-info".to_string(),
+            steps: vec![
+                ScenarioStep::ConfigureGate {
+                    min_level: "error".to_string(),
+                    debug_metric_names: vec!["gate_error_probe".to_string()],
+                    enabled: true,
+                },
+                ScenarioStep::EmitCounter {
+                    name: "gate_error_probe".to_string(),
+                    labels: vec![],
+                    delta: 1,
+                },
+                ScenarioStep::SleepMs { ms: 80 },
+                ScenarioStep::AssertMetricCount {
+                    name: "gate_error_probe".to_string(),
+                    expected: 0,
+                },
+            ],
+        }
+    }
 }
 
 fn default_gate_enabled() -> bool {

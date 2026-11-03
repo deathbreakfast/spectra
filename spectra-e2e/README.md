@@ -25,6 +25,13 @@ Inline tests stay for schema registry smoke and query DTO mapping.
 - console NDJSON telemetry row (happy path)
 - event query limit clamp (sad path — huge limit)
 - reject invalid event filter field (sad path — `Error::Config`)
+- label sets and gauge shards filter independently (happy path)
+- a metric name never emitted stays empty while another is populated (sad path)
+- several events persist and a small limit caps the page (happy path)
+- an event table with no rows counts zero (sad path)
+- quote- and whitespace-shaped filter fields are rejected (sad path)
+- a global `error` min level drops a debug-tier counter (sad path)
+- sqlite rows survive closing and reopening the database files (`tests/sqlite_durability.rs`)
 
 Performance budgets belong in [`spectra-bench`](../spectra-bench/README.md).
 
@@ -32,7 +39,7 @@ Performance budgets belong in [`spectra-bench`](../spectra-bench/README.md).
 
 | Trigger | Scope | Command |
 |---------|-------|---------|
-| Push / PR | **Core** — 12 scenarios × embedded matrix | `cargo test -p spectra-e2e` |
+| Push / PR | **Core** — 19 scenarios × embedded matrix | `cargo test -p spectra-e2e` |
 | Git tag `v*` | **Extended** — remote storage + live contracts | see `ci-extended.yml` |
 
 PR CI also runs storage port contracts: `cargo test -p spectra-backend-{mem,sqlite,tensorbase,clickhouse} --test storage_contract`.
@@ -55,6 +62,13 @@ PR CI also runs storage port contracts: `cargo test -p spectra-backend-{mem,sqli
 | `gate-disabled-allows-debug` | Happy | ✓ | ✓ | ✓ | ✓ |
 | `query-limit-clamped` | Sad | ✓ | ✓ | ✓ | ✓ |
 | `query-reject-bad-filter-field` | Sad | ✓ | ✓ | ✓ | ✓ |
+| `label-sets-isolated` | Happy | ✓ | ✓ | ✓ | ✓ |
+| `gauge-shard-filter` | Happy | ✓ | ✓ | ✓ | ✓ |
+| `metric-name-isolation` | Sad | ✓ | ✓ | ✓ | ✓ |
+| `event-multi-row-small-limit` | Happy | ✓ | ✓ | ✓ | ✓ |
+| `event-table-empty` | Sad | ✓ | ✓ | ✓ | ✓ |
+| `query-reject-quoted-filter-field` | Sad | ✓ | ✓ | ✓ | ✓ |
+| `gate-min-level-error-drops-info` | Sad | ✓ | ✓ | ✓ | ✓ |
 
 Remote rows use `Topology::RemoteIngest` (`remote_ingest` submodule) and require `SPECTRA_TENSORBASE_URL` / `SPECTRA_CLICKHOUSE_URL`. Soft-skip when the URL for a storage is unset.
 

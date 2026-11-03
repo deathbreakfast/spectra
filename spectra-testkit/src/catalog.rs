@@ -104,6 +104,48 @@ pub fn catalog_entries() -> &'static [CatalogEntry] {
             spec: ScenarioSpec::query_reject_bad_filter_field,
             matrix_rows: ci_embedded_rows,
         },
+        CatalogEntry {
+            id: "label-sets-isolated",
+            path: PathKind::Happy,
+            spec: ScenarioSpec::label_sets_isolated,
+            matrix_rows: ci_embedded_rows,
+        },
+        CatalogEntry {
+            id: "gauge-shard-filter",
+            path: PathKind::Happy,
+            spec: ScenarioSpec::gauge_shard_filter,
+            matrix_rows: ci_embedded_rows,
+        },
+        CatalogEntry {
+            id: "metric-name-isolation",
+            path: PathKind::Sad,
+            spec: ScenarioSpec::metric_name_isolation,
+            matrix_rows: ci_embedded_rows,
+        },
+        CatalogEntry {
+            id: "event-multi-row-small-limit",
+            path: PathKind::Happy,
+            spec: ScenarioSpec::event_multi_row_small_limit,
+            matrix_rows: ci_embedded_rows,
+        },
+        CatalogEntry {
+            id: "event-table-empty",
+            path: PathKind::Sad,
+            spec: ScenarioSpec::event_table_empty,
+            matrix_rows: ci_embedded_rows,
+        },
+        CatalogEntry {
+            id: "query-reject-quoted-filter-field",
+            path: PathKind::Sad,
+            spec: ScenarioSpec::query_reject_quoted_filter_field,
+            matrix_rows: ci_embedded_rows,
+        },
+        CatalogEntry {
+            id: "gate-min-level-error-drops-info",
+            path: PathKind::Sad,
+            spec: ScenarioSpec::gate_min_level_error_drops_info,
+            matrix_rows: ci_embedded_rows,
+        },
     ]
 }
 
@@ -164,6 +206,48 @@ pub fn remote_catalog_entries() -> &'static [CatalogEntry] {
             id: "query-reject-bad-filter-field",
             path: PathKind::Sad,
             spec: ScenarioSpec::query_reject_bad_filter_field,
+            matrix_rows: remote_ingest_rows,
+        },
+        CatalogEntry {
+            id: "label-sets-isolated",
+            path: PathKind::Happy,
+            spec: ScenarioSpec::label_sets_isolated,
+            matrix_rows: remote_ingest_rows,
+        },
+        CatalogEntry {
+            id: "gauge-shard-filter",
+            path: PathKind::Happy,
+            spec: ScenarioSpec::gauge_shard_filter,
+            matrix_rows: remote_ingest_rows,
+        },
+        CatalogEntry {
+            id: "metric-name-isolation",
+            path: PathKind::Sad,
+            spec: ScenarioSpec::metric_name_isolation,
+            matrix_rows: remote_ingest_rows,
+        },
+        CatalogEntry {
+            id: "event-multi-row-small-limit",
+            path: PathKind::Happy,
+            spec: ScenarioSpec::event_multi_row_small_limit,
+            matrix_rows: remote_ingest_rows,
+        },
+        CatalogEntry {
+            id: "event-table-empty",
+            path: PathKind::Sad,
+            spec: ScenarioSpec::event_table_empty,
+            matrix_rows: remote_ingest_rows,
+        },
+        CatalogEntry {
+            id: "query-reject-quoted-filter-field",
+            path: PathKind::Sad,
+            spec: ScenarioSpec::query_reject_quoted_filter_field,
+            matrix_rows: remote_ingest_rows,
+        },
+        CatalogEntry {
+            id: "gate-min-level-error-drops-info",
+            path: PathKind::Sad,
+            spec: ScenarioSpec::gate_min_level_error_drops_info,
             matrix_rows: remote_ingest_rows,
         },
     ]
@@ -228,6 +312,13 @@ macro_rules! invoke_catalog_scenario_ids {
             gate_disabled_allows_debug,
             query_limit_clamped,
             query_reject_bad_filter_field,
+            label_sets_isolated,
+            gauge_shard_filter,
+            metric_name_isolation,
+            event_multi_row_small_limit,
+            event_table_empty,
+            query_reject_quoted_filter_field,
+            gate_min_level_error_drops_info,
         );
     };
 }
@@ -246,6 +337,13 @@ macro_rules! invoke_remote_catalog_scenario_ids {
             gate_disabled_allows_debug,
             query_limit_clamped,
             query_reject_bad_filter_field,
+            label_sets_isolated,
+            gauge_shard_filter,
+            metric_name_isolation,
+            event_multi_row_small_limit,
+            event_table_empty,
+            query_reject_quoted_filter_field,
+            gate_min_level_error_drops_info,
         );
     };
 }

@@ -1304,8 +1304,10 @@ dependencies = [
 name = "spectra-e2e"
 version = "0.1.3"
 dependencies = [
+ "chrono",
  "serde_json",
  "spectra-testkit",
+ "tempfile",
  "tokio",
  "uf-spectra",
 ]
