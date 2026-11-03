@@ -295,19 +295,29 @@ impl EventStorageBackend for MemEventsBackend {
     }
 
     async fn query_aggregate(&self, filter: EventsAggregateFilter) -> Result<EventAggregateResult> {
-        let rows = self
-            .query_rows(EventsQueryFilter {
-                table: filter.table.clone(),
-                start: Some(filter.start),
-                end: Some(filter.end),
-                partition: filter.partition.clone(),
-                limit: None,
-                offset: None,
-                sort_field: None,
-                sort_desc: false,
-                filter: filter.filter.clone(),
-            })
-            .await?;
+        let rows = {
+            let guard = self.rows.read();
+            let scoped: Vec<EventRow> = guard
+                .get(&filter.table)
+                .map(|rows| {
+                    rows.iter()
+                        .filter(|r| r.ts >= filter.start && r.ts <= filter.end)
+                        .map(|r| EventRow {
+                            ts: r.ts,
+                            fields: r.fields.clone(),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            spectra_core::select_event_rows(
+                scoped,
+                &EventsQueryFilter {
+                    partition: filter.partition.clone(),
+                    filter: filter.filter.clone(),
+                    ..Default::default()
+                },
+            )
+        };
         Ok(aggregate_event_rows(filter.view, &filter, &rows))
     }
 }
@@ -347,6 +357,51 @@ mod tests {
             .expect("query");
         assert_eq!(points.len(), 1);
         assert!((points[0].value - 3.0).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn aggregate_counts_rows_past_query_cap() {
+        let backend = MemEventsBackend::new();
+        let ts = Utc::now();
+        for _ in 0..1500 {
+            backend
+                .append_row("req_log", &json!({"msg": "ok"}), ts, None)
+                .await
+                .expect("write");
+        }
+        let rows = backend
+            .query_rows(EventsQueryFilter {
+                table: "req_log".into(),
+                ..Default::default()
+            })
+            .await
+            .expect("rows");
+        assert_eq!(rows.len(), 1000);
+        let filter = EventsAggregateFilter {
+            table: "req_log".into(),
+            start: ts - Duration::seconds(1),
+            end: ts + Duration::seconds(1),
+            partition: None,
+            filter: Default::default(),
+            measure: Default::default(),
+            measure_field: None,
+            time_bucket_secs: Some(3600),
+            group_by_field: None,
+            row_fields: Vec::new(),
+            pivot_field: None,
+            view: spectra_core::EventExploreView::TimeSeries,
+        };
+        match backend.query_aggregate(filter).await.expect("aggregate") {
+            EventAggregateResult::TimeSeries { series, .. } => {
+                let total: f64 = series
+                    .iter()
+                    .flat_map(|s| s.points.iter())
+                    .map(|p| p.value)
+                    .sum();
+                assert!((total - 1500.0).abs() < f64::EPSILON, "total={total}");
+            }
+            other => panic!("unexpected result {other:?}"),
+        }
     }
 
     #[tokio::test]

@@ -74,7 +74,7 @@ pub use entry::{
 pub use error::{Error, Result};
 pub use event_filter::{
     finalize_event_rows, matches_filter_item, paginate_event_rows, row_matches_filter,
-    row_matches_partition, sort_event_rows,
+    row_matches_partition, select_event_rows, sort_event_rows,
 };
 pub use query::{
     EventAggregateRequest, EventAggregateResult, EventAggregationSpec, EventExploreView,
