@@ -111,6 +111,28 @@ let spectra = Spectra::builder()
 // Emits fan out to transport synchronously, then async storage persist (default).
 ```
 
+### Multiple stores
+
+Each schema declares a `store:` name. By default every store lands on the backend pair you set with `metrics_backend` and `events_backend`. To give a store its own backends, register it on the builder:
+
+```rust
+use std::sync::Arc;
+use spectra::{MemEventsBackend, MemMetricsBackend, Spectra};
+
+let spectra = Spectra::builder()
+    .metrics_backend(Arc::new(MemMetricsBackend::new())) // "default" store
+    .events_backend(Arc::new(MemEventsBackend::new()))
+    .store_backend(
+        "billing",
+        Arc::new(MemMetricsBackend::new()),
+        Arc::new(MemEventsBackend::new()),
+    )
+    .embedded()
+    .build()?;
+```
+
+Schemas declared with `store: "billing"` write to and query from the billing pair. A store with no `store_backend` entry falls back to the default pair, and registering the same name twice keeps the last one. `spectra::spectra_core::collect_distinct_spectra_store_names()` lists the store names your linked schemas declare, so a host can register one pair per name instead of hardcoding them. The ClickHouse and TensorBase connectors can open a dedicated database per store on the same server. `spectra-e2e/tests/store_routing.rs` covers the routing and fallback behavior.
+
 ### Examples (canonical path)
 
 Full runbooks: [`spectra/README.md` — How to run examples](spectra/README.md#how-to-run-examples).
