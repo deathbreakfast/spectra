@@ -30,7 +30,7 @@ Inline tests stay for schema registry smoke and query DTO mapping.
 - several events persist and a small limit caps the page (happy path)
 - an event table with no rows counts zero (sad path)
 - quote- and whitespace-shaped filter fields are rejected (sad path)
-- a global `error` min level drops a debug-tier counter (sad path)
+- a global `error` min level drops an info-tier counter (sad path)
 - sqlite rows survive closing and reopening the database files (`tests/sqlite_durability.rs`)
 
 Performance budgets belong in [`spectra-bench`](../spectra-bench/README.md).

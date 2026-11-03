@@ -452,14 +452,14 @@ impl ScenarioSpec {
         }
     }
 
-    /// A global `error` min level drops a debug-tier counter (sad path).
+    /// A global `error` min level drops an info-tier counter (sad path).
     pub fn gate_min_level_error_drops_info() -> Self {
         Self {
             id: "gate-min-level-error-drops-info".to_string(),
             steps: vec![
                 ScenarioStep::ConfigureGate {
                     min_level: "error".to_string(),
-                    debug_metric_names: vec!["gate_error_probe".to_string()],
+                    debug_metric_names: vec![],
                     enabled: true,
                 },
                 ScenarioStep::EmitCounter {
