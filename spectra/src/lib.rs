@@ -498,7 +498,7 @@ pub use spectra_core::{
     try_record_gauge_now, validate_spectra_ident, ChainedSink, Error, FieldClassification,
     LoggingKind, MetricEmit, RecordingSink, Result, SchemaFieldMetadata, SchemaMetadata,
     SchemaMetadataInit, SchemaRegistry, SpectraEvent, SpectraLevel, SpectraRouter, SpectraSink,
-    MAX_EVENT_QUERY_LIMIT, MAX_EVENT_QUERY_OFFSET, PII_MASK,
+    CALLSITE_FIELD, MAX_EVENT_QUERY_LIMIT, MAX_EVENT_QUERY_OFFSET, PII_MASK,
 };
 pub use spectra_macros::{spectra_metric, spectra_schema};
 pub use spectra_runtime::{
