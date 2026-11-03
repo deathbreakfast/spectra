@@ -141,6 +141,10 @@ pub struct SpectraBuilder {
     embedded: bool,
     persist: bool,
     persist_config: PersistConfig,
+    persist_metrics: Option<SharedMetricsBackend>,
+    persist_events: Option<SharedEventBackend>,
+    persist_store_metrics: HashMap<String, SharedMetricsBackend>,
+    persist_store_events: HashMap<String, SharedEventBackend>,
 }
 
 impl Default for SpectraBuilder {
@@ -162,6 +166,10 @@ impl SpectraBuilder {
             embedded: false,
             persist: true,
             persist_config: PersistConfig::default(),
+            persist_metrics: None,
+            persist_events: None,
+            persist_store_metrics: HashMap::new(),
+            persist_store_events: HashMap::new(),
         }
     }
 
@@ -235,6 +243,66 @@ impl SpectraBuilder {
         self
     }
 
+    /// Give the persist queue its own default backend pair, separate from the read backends.
+    ///
+    /// By default the persist worker writes through the same backends that
+    /// [`Spectra::router`] queries. Backends such as SQLite serialize every call on one
+    /// connection, so a long query blocks writes. Passing a second instance here (for
+    /// example another backend handle opened on the same path) puts
+    /// writes on a dedicated connection while queries keep the original one.
+    ///
+    /// Stores with their own [`Self::store_backend`] entry keep writing there unless
+    /// [`Self::persist_store_backend`] overrides them. Building fails if this is combined
+    /// with [`Self::persist_disabled`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use std::sync::Arc;
+    /// use spectra_backend_mem::{MemEventsBackend, MemMetricsBackend};
+    /// use spectra_runtime::Spectra;
+    ///
+    /// # fn example() -> spectra_core::Result<()> {
+    /// let spectra = Spectra::builder()
+    ///     .metrics_backend(Arc::new(MemMetricsBackend::new())) // queried
+    ///     .events_backend(Arc::new(MemEventsBackend::new()))
+    ///     .persist_backend(
+    ///         Arc::new(MemMetricsBackend::new()), // written by the persist queue
+    ///         Arc::new(MemEventsBackend::new()),
+    ///     )
+    ///     .embedded()
+    ///     .build()?;
+    /// # let _ = spectra;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn persist_backend(
+        mut self,
+        metrics: SharedMetricsBackend,
+        events: SharedEventBackend,
+    ) -> Self {
+        self.persist_metrics = Some(metrics);
+        self.persist_events = Some(events);
+        self
+    }
+
+    /// Give the persist queue its own backend pair for one `store:` name.
+    ///
+    /// Takes precedence over [`Self::store_backend`] and [`Self::persist_backend`] for writes
+    /// to that store; reads still use the [`Self::store_backend`] entry or the default
+    /// backend. Calling this twice for the same store name keeps the last registration.
+    pub fn persist_store_backend(
+        mut self,
+        store: impl Into<String>,
+        metrics: SharedMetricsBackend,
+        events: SharedEventBackend,
+    ) -> Self {
+        let store = store.into();
+        self.persist_store_metrics.insert(store.clone(), metrics);
+        self.persist_store_events.insert(store, events);
+        self
+    }
+
     /// Configure the L2 persist queue and batch settings (ignored when persist is disabled).
     ///
     /// Defaults: `queue_max=8192`, `batch_max=32`, `batch_wait=5ms`, `batch_enabled=true`.
@@ -293,17 +361,57 @@ impl SpectraBuilder {
         Ok(self)
     }
 
+    /// Router the persist worker writes through: `persist_store_backend` entries layered over
+    /// `store_backend` entries, with `persist_backend` (else the read default) as fallback.
+    fn build_write_router(
+        &self,
+        metrics: &SharedMetricsBackend,
+        events: &SharedEventBackend,
+        registry: &SchemaRegistry,
+    ) -> SpectraRouter {
+        let mut store_metrics = self.store_metrics.clone();
+        store_metrics.extend(self.persist_store_metrics.clone());
+        let mut store_events = self.store_events.clone();
+        store_events.extend(self.persist_store_events.clone());
+        build_router_from_registry(
+            self.persist_metrics
+                .clone()
+                .unwrap_or_else(|| Arc::clone(metrics)),
+            self.persist_events
+                .clone()
+                .unwrap_or_else(|| Arc::clone(events)),
+            store_metrics,
+            store_events,
+            registry,
+        )
+    }
+
     /// Install global config, router, and sink; returns a handle to the running runtime.
-    pub fn build(self) -> spectra_core::Result<Spectra> {
+    pub fn build(mut self) -> spectra_core::Result<Spectra> {
         let metrics = self
             .metrics
+            .take()
             .ok_or_else(|| spectra_core::Error::config("metrics_backend is required"))?;
         let events = self
             .events
+            .take()
             .ok_or_else(|| spectra_core::Error::config("events_backend is required"))?;
+
+        let has_persist_backends =
+            self.persist_metrics.is_some() || !self.persist_store_metrics.is_empty();
+        if !self.persist && has_persist_backends {
+            return Err(spectra_core::Error::config(
+                "SpectraBuilder: persist_backend/persist_store_backend set but persist is disabled",
+            ));
+        }
+
+        let write_router = has_persist_backends.then(|| {
+            Arc::new(self.build_write_router(&metrics, &events, SchemaRegistry::global()))
+        });
 
         let router = build_router(metrics, events, self.store_metrics, self.store_events);
         let router = Arc::new(router);
+        let write_router = write_router.unwrap_or_else(|| Arc::clone(&router));
         SpectraRouter::set_global(Arc::clone(&router));
 
         let config = self.config.unwrap_or_else(SpectraConfig::from_env);
@@ -314,7 +422,7 @@ impl SpectraBuilder {
             match (self.persist, self.transport_sink) {
                 (true, Some(inner)) => {
                     let sink = StoragePersistSink::with_config(
-                        Arc::clone(&router),
+                        Arc::clone(&write_router),
                         Some(inner),
                         persist_config,
                     );
@@ -322,8 +430,10 @@ impl SpectraBuilder {
                     (Arc::new(sink), Some(handle))
                 }
                 (true, None) => {
-                    let sink =
-                        StoragePersistSink::new_with_config(Arc::clone(&router), persist_config);
+                    let sink = StoragePersistSink::new_with_config(
+                        Arc::clone(&write_router),
+                        persist_config,
+                    );
                     let handle = sink.handle();
                     (Arc::new(sink), Some(handle))
                 }
@@ -677,6 +787,134 @@ mod tests {
                     .expect("query");
                 assert_eq!(points.len(), 1, "counter {i}");
             }
+        })
+        .await;
+    }
+
+    fn counter_range(name: &str) -> spectra_core::MetricsQueryRange {
+        spectra_core::MetricsQueryRange {
+            metric_name: name.into(),
+            start: chrono::Utc::now() - chrono::Duration::hours(1),
+            end: chrono::Utc::now() + chrono::Duration::hours(1),
+            label_matchers: vec![],
+        }
+    }
+
+    #[tokio::test]
+    async fn persist_backend_receives_writes_not_read_backend_happy() {
+        with_isolated_runtime(|| async {
+            let (read_m, read_e) = mem_backends();
+            let (write_m, write_e) = mem_backends();
+
+            let spectra = Spectra::builder()
+                .metrics_backend(Arc::clone(&read_m))
+                .events_backend(read_e)
+                .persist_backend(Arc::clone(&write_m), write_e)
+                .embedded()
+                .build()
+                .expect("build");
+
+            try_record_counter_now("dedicated_conn_counter", &[], 1);
+            spectra.flush_persist().await.expect("flush");
+
+            let written = write_m
+                .query_range(counter_range("dedicated_conn_counter"))
+                .await
+                .expect("query write backend");
+            assert_eq!(written.len(), 1);
+            let read = spectra
+                .router()
+                .query_metrics(counter_range("dedicated_conn_counter"))
+                .await
+                .expect("query read router");
+            assert!(read.is_empty());
+        })
+        .await;
+    }
+
+    #[test]
+    fn persist_store_backend_layers_over_store_backend_happy() {
+        let mut registry = SchemaRegistry::new();
+        registry.register(schema("pa_metric", "a", LoggingKind::Metric));
+        registry.register(schema("pb_metric", "b", LoggingKind::Metric));
+
+        let (default_m, default_e) = mem_backends();
+        let (persist_default_m, persist_default_e) = mem_backends();
+        let (a_m, a_e) = mem_backends();
+        let (persist_a_m, persist_a_e) = mem_backends();
+
+        let builder = SpectraBuilder::new()
+            .store_backend("a", Arc::clone(&a_m), a_e)
+            .persist_backend(Arc::clone(&persist_default_m), persist_default_e)
+            .persist_store_backend("a", Arc::clone(&persist_a_m), persist_a_e);
+        let write = builder.build_write_router(&default_m, &default_e, &registry);
+
+        // Write override wins over the read store backend for store "a".
+        assert!(Arc::ptr_eq(
+            &write.resolve_metrics("pa_metric"),
+            &persist_a_m
+        ));
+        // Store "b" has no override and falls to the persist default.
+        assert!(Arc::ptr_eq(
+            &write.resolve_metrics("pb_metric"),
+            &persist_default_m
+        ));
+    }
+
+    #[test]
+    fn store_backend_without_persist_override_keeps_writing_there_sad() {
+        let mut registry = SchemaRegistry::new();
+        registry.register(schema("pa_metric", "a", LoggingKind::Metric));
+
+        let (default_m, default_e) = mem_backends();
+        let (persist_default_m, persist_default_e) = mem_backends();
+        let (a_m, a_e) = mem_backends();
+
+        let builder = SpectraBuilder::new()
+            .store_backend("a", Arc::clone(&a_m), a_e)
+            .persist_backend(persist_default_m, persist_default_e);
+        let write = builder.build_write_router(&default_m, &default_e, &registry);
+
+        assert!(Arc::ptr_eq(&write.resolve_metrics("pa_metric"), &a_m));
+    }
+
+    #[tokio::test]
+    async fn persist_backend_with_persist_disabled_errors_sad() {
+        let _g = spectra_core::GLOBAL_TEST_LOCK.lock().await;
+        spectra_core::reset_config_and_sink_for_test();
+        let (metrics, events) = mem_backends();
+        let (write_m, write_e) = mem_backends();
+        let result = Spectra::builder()
+            .metrics_backend(metrics)
+            .events_backend(events)
+            .sink(Arc::new(RecordingSink::new()) as Arc<dyn SpectraSink>)
+            .persist_backend(write_m, write_e)
+            .persist_disabled()
+            .build();
+        assert!(result
+            .err()
+            .expect("err")
+            .to_string()
+            .contains("persist is disabled"));
+    }
+
+    #[tokio::test]
+    async fn no_persist_backend_writes_to_read_backend_sad() {
+        with_isolated_runtime(|| async {
+            let (metrics, events) = mem_backends();
+            let spectra = Spectra::builder()
+                .metrics_backend(Arc::clone(&metrics))
+                .events_backend(events)
+                .embedded()
+                .build()
+                .expect("build");
+            try_record_counter_now("shared_conn_counter", &[], 1);
+            spectra.flush_persist().await.expect("flush");
+            let points = metrics
+                .query_range(counter_range("shared_conn_counter"))
+                .await
+                .expect("query");
+            assert_eq!(points.len(), 1);
         })
         .await;
     }
