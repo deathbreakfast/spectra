@@ -14,12 +14,20 @@ use crate::storage::{EventRow, EventsQueryFilter};
 ///
 /// Pagination applies [`crate::clamp_event_paging`] so in-process backends honor the same
 /// maxima as remote SQL (`MAX_EVENT_QUERY_LIMIT` / `MAX_EVENT_QUERY_OFFSET`).
-pub fn finalize_event_rows(mut rows: Vec<EventRow>, filter: &EventsQueryFilter) -> Vec<EventRow> {
+pub fn finalize_event_rows(rows: Vec<EventRow>, filter: &EventsQueryFilter) -> Vec<EventRow> {
+    let rows = select_event_rows(rows, filter);
+    let (limit, offset) = crate::clamp_event_paging(filter.limit, filter.offset);
+    paginate_event_rows(rows, Some(limit), Some(offset))
+}
+
+/// Apply partition, grid filter, and sort without pagination.
+///
+/// Aggregates use this so they fold every row in the window instead of one capped page.
+pub fn select_event_rows(mut rows: Vec<EventRow>, filter: &EventsQueryFilter) -> Vec<EventRow> {
     rows.retain(|r| row_matches_partition(r, filter.partition.as_deref()));
     rows.retain(|r| row_matches_filter(r, &filter.filter));
     sort_event_rows(&mut rows, filter.sort_field.as_deref(), filter.sort_desc);
-    let (limit, offset) = crate::clamp_event_paging(filter.limit, filter.offset);
-    paginate_event_rows(rows, Some(limit), Some(offset))
+    rows
 }
 
 /// Whether `row` matches optional `partition` against `fields.partition`.
@@ -226,6 +234,15 @@ mod tests {
 
     fn row(ts: DateTime<Utc>, fields: Value) -> EventRow {
         EventRow { ts, fields }
+    }
+
+    #[test]
+    fn select_event_rows_is_not_paginated() {
+        let ts = base_ts();
+        let rows: Vec<EventRow> = (0..1500).map(|i| row(ts, json!({ "n": i }))).collect();
+        let filter = EventsQueryFilter::default();
+        assert_eq!(select_event_rows(rows.clone(), &filter).len(), 1500);
+        assert_eq!(finalize_event_rows(rows, &filter).len(), 1000);
     }
 
     fn base_ts() -> DateTime<Utc> {

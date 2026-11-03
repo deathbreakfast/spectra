@@ -111,18 +111,37 @@ impl MemStore {
     }
 
     pub fn query_rows(&self, filter: EventsQueryFilter) -> Result<Vec<EventRow>> {
+        let out = self.scoped_events(&filter.table, filter.start, filter.end);
+        Ok(spectra_core::finalize_event_rows(out, &filter))
+    }
+
+    /// Rows for `table` within the inclusive time bounds, with no filter or paging.
+    pub fn scoped_rows(
+        &self,
+        table: &str,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Vec<EventRow> {
+        self.scoped_events(table, Some(start), Some(end))
+    }
+
+    fn scoped_events(
+        &self,
+        table: &str,
+        start: Option<DateTime<Utc>>,
+        end: Option<DateTime<Utc>>,
+    ) -> Vec<EventRow> {
         let guard = self.events.read();
-        let out: Vec<EventRow> = guard
+        guard
             .iter()
-            .filter(|r| r.table == filter.table)
-            .filter(|r| filter.start.map(|s| r.ts >= s).unwrap_or(true))
-            .filter(|r| filter.end.map(|e| r.ts <= e).unwrap_or(true))
+            .filter(|r| r.table == table)
+            .filter(|r| start.map(|s| r.ts >= s).unwrap_or(true))
+            .filter(|r| end.map(|e| r.ts <= e).unwrap_or(true))
             .map(|r| EventRow {
                 ts: r.ts,
                 fields: r.fields.clone(),
             })
-            .collect();
-        Ok(spectra_core::finalize_event_rows(out, &filter))
+            .collect()
     }
 }
 

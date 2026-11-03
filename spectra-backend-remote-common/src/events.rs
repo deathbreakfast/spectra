@@ -180,14 +180,15 @@ impl EventStorageBackend for RemoteEventsBackend {
     async fn query_aggregate(&self, filter: EventsAggregateFilter) -> Result<EventAggregateResult> {
         match &self.inner {
             EventsInner::Mem(store) => {
-                let rows = store.query_rows(EventsQueryFilter {
-                    table: filter.table.clone(),
-                    start: Some(filter.start),
-                    end: Some(filter.end),
-                    partition: filter.partition.clone(),
-                    filter: filter.filter.clone(),
-                    ..Default::default()
-                })?;
+                let rows = store.scoped_rows(&filter.table, filter.start, filter.end);
+                let rows = spectra_core::select_event_rows(
+                    rows,
+                    &EventsQueryFilter {
+                        partition: filter.partition.clone(),
+                        filter: filter.filter.clone(),
+                        ..Default::default()
+                    },
+                );
                 Ok(aggregate_event_rows(filter.view, &filter, &rows))
             }
             EventsInner::Remote(client) => {

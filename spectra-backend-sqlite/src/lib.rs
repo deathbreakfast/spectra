@@ -358,6 +358,40 @@ pub struct SqliteEventsBackend {
 }
 
 impl SqliteEventsBackend {
+    /// Loads rows for `table` within the optional RFC 3339 time bounds, with no paging.
+    async fn scoped_rows(
+        &self,
+        table: String,
+        start: Option<String>,
+        end: Option<String>,
+    ) -> Result<Vec<EventRow>> {
+        let conn = Arc::clone(&self.conn);
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.lock();
+            let sql = "SELECT fields, ts FROM spectra_events WHERE table_name = ?1 \
+                 AND (?2 IS NULL OR ts >= ?2) AND (?3 IS NULL OR ts <= ?3)";
+            let mut stmt = conn.prepare(sql).map_err(map_sqlite)?;
+            let rows = stmt
+                .query_map(params![table, start, end], |row| {
+                    let fields: String = row.get(0)?;
+                    let ts: String = row.get(1)?;
+                    Ok((fields, ts))
+                })
+                .map_err(map_sqlite)?;
+            let mut out = Vec::new();
+            for row in rows {
+                let (fields, ts) = row.map_err(map_sqlite)?;
+                out.push(EventRow {
+                    ts: parse_ts(&ts)?,
+                    fields: serde_json::from_str(&fields)?,
+                });
+            }
+            Ok::<_, Error>(out)
+        })
+        .await
+        .map_err(map_join)?
+    }
+
     /// Open or create a SQLite database at `path` and apply events DDL migrations.
     ///
     /// The constructor is synchronous. Parent directories must already exist. Use a separate
@@ -442,36 +476,13 @@ impl EventStorageBackend for SqliteEventsBackend {
 
     #[tracing::instrument(name = "spectra.sqlite.query_rows", skip(self, filter), fields(table = %filter.table))]
     async fn query_rows(&self, filter: EventsQueryFilter) -> Result<Vec<EventRow>> {
-        let conn = Arc::clone(&self.conn);
-        let table = filter.table.clone();
-        let start = filter.start.map(ts_to_rfc3339);
-        let end = filter.end.map(ts_to_rfc3339);
-        // Fetch table/time-scoped candidates, then apply shared filter/sort/pagination
-        // so operator semantics match mem and remote-common mem store.
-        let out = tokio::task::spawn_blocking(move || {
-            let conn = conn.lock();
-            let sql = "SELECT fields, ts FROM spectra_events WHERE table_name = ?1 \
-                 AND (?2 IS NULL OR ts >= ?2) AND (?3 IS NULL OR ts <= ?3)";
-            let mut stmt = conn.prepare(sql).map_err(map_sqlite)?;
-            let rows = stmt
-                .query_map(params![table, start, end], |row| {
-                    let fields: String = row.get(0)?;
-                    let ts: String = row.get(1)?;
-                    Ok((fields, ts))
-                })
-                .map_err(map_sqlite)?;
-            let mut out = Vec::new();
-            for row in rows {
-                let (fields, ts) = row.map_err(map_sqlite)?;
-                out.push(EventRow {
-                    ts: parse_ts(&ts)?,
-                    fields: serde_json::from_str(&fields)?,
-                });
-            }
-            Ok::<_, Error>(out)
-        })
-        .await
-        .map_err(map_join)??;
+        let out = self
+            .scoped_rows(
+                filter.table.clone(),
+                filter.start.map(ts_to_rfc3339),
+                filter.end.map(ts_to_rfc3339),
+            )
+            .await?;
         let mut filter = filter;
         if filter.limit.is_none() {
             filter.limit = Some(1000);
@@ -481,18 +492,20 @@ impl EventStorageBackend for SqliteEventsBackend {
 
     async fn query_aggregate(&self, filter: EventsAggregateFilter) -> Result<EventAggregateResult> {
         let rows = self
-            .query_rows(EventsQueryFilter {
-                table: filter.table.clone(),
-                start: Some(filter.start),
-                end: Some(filter.end),
-                partition: filter.partition.clone(),
-                limit: None,
-                offset: None,
-                sort_field: None,
-                sort_desc: false,
-                filter: filter.filter.clone(),
-            })
+            .scoped_rows(
+                filter.table.clone(),
+                Some(ts_to_rfc3339(filter.start)),
+                Some(ts_to_rfc3339(filter.end)),
+            )
             .await?;
+        let rows = spectra_core::select_event_rows(
+            rows,
+            &EventsQueryFilter {
+                partition: filter.partition.clone(),
+                filter: filter.filter.clone(),
+                ..Default::default()
+            },
+        );
         Ok(aggregate_event_rows(filter.view, &filter, &rows))
     }
 }
@@ -523,6 +536,52 @@ mod tests {
             .await
             .expect("query");
         assert_eq!(points.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn sqlite_aggregate_counts_rows_past_query_cap() {
+        let dir = tempdir().expect("tempdir");
+        let backend = SqliteEventsBackend::new(dir.path().join("events.db")).expect("open");
+        let ts = Utc::now();
+        for _ in 0..1500 {
+            backend
+                .append_row("req", &json!({"x": 1}), ts, None)
+                .await
+                .expect("write");
+        }
+        let rows = backend
+            .query_rows(EventsQueryFilter {
+                table: "req".into(),
+                ..Default::default()
+            })
+            .await
+            .expect("rows");
+        assert_eq!(rows.len(), 1000);
+        let filter = EventsAggregateFilter {
+            table: "req".into(),
+            start: ts - Duration::seconds(1),
+            end: ts + Duration::seconds(1),
+            partition: None,
+            filter: Default::default(),
+            measure: Default::default(),
+            measure_field: None,
+            time_bucket_secs: Some(3600),
+            group_by_field: None,
+            row_fields: Vec::new(),
+            pivot_field: None,
+            view: spectra_core::EventExploreView::TimeSeries,
+        };
+        match backend.query_aggregate(filter).await.expect("aggregate") {
+            EventAggregateResult::TimeSeries { series, .. } => {
+                let total: f64 = series
+                    .iter()
+                    .flat_map(|s| s.points.iter())
+                    .map(|p| p.value)
+                    .sum();
+                assert!((total - 1500.0).abs() < f64::EPSILON, "total={total}");
+            }
+            other => panic!("unexpected result {other:?}"),
+        }
     }
 
     #[tokio::test]
