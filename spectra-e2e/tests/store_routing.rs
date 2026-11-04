@@ -4,7 +4,6 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use spectra::spectra_core::{
     current_emit_ts, EventStorageBackend, EventsQueryFilter, MetricsQueryRange,
@@ -159,7 +158,6 @@ fn build(default: &Backends, stores: &[(&str, &Backends)]) -> Spectra {
 
 async fn settle(spectra: &Spectra) {
     spectra.flush_persist().await.expect("flush persist");
-    tokio::time::sleep(Duration::from_millis(80)).await;
 }
 
 #[tokio::test]
