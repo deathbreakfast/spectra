@@ -32,6 +32,7 @@ Inline tests stay for schema registry smoke and query DTO mapping.
 - quote- and whitespace-shaped filter fields are rejected (sad path)
 - a global `error` min level drops an info-tier counter (sad path)
 - sqlite rows survive closing and reopening the database files (`tests/sqlite_durability.rs`)
+- per-store backend routing: a declared store gets its own events and metrics, stores stay isolated, an unregistered store falls back to default, and re-registering a store keeps the last pair (`tests/store_routing.rs`)
 
 Performance budgets belong in [`spectra-bench`](../spectra-bench/README.md).
 
