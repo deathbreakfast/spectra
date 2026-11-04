@@ -57,17 +57,27 @@ pub fn event_helper(spec: &EventSchemaSpec) -> TokenStream {
 
         impl #logger_name {
             /// Emit with an explicit timestamp (preserved via `current_emit_ts` at the sink).
+            ///
+            /// The row also carries a reserved `_callsite` object (`file`, `line`) naming the
+            /// caller of this function.
+            #[track_caller]
             pub fn log_at(
                 #(#field_params,)*
                 ts: chrono::DateTime<chrono::Utc>,
             ) {
                 let mut map = serde_json::Map::new();
                 #(#json_fields)*
+                let caller = ::std::panic::Location::caller();
+                map.insert(
+                    ::spectra::CALLSITE_FIELD.to_string(),
+                    serde_json::json!({ "file": caller.file(), "line": caller.line() }),
+                );
                 let fields = serde_json::Value::Object(map);
                 ::spectra::try_log_event_at(#table_lit, &fields, ts);
             }
 
             /// Emit with the current UTC timestamp.
+            #[track_caller]
             pub fn log(#(#field_params),*) {
                 Self::log_at(#(#field_inits,)* chrono::Utc::now());
             }

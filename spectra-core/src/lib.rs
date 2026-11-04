@@ -111,8 +111,8 @@ pub use test_util::{reset_config_and_sink_for_test, GLOBAL_TEST_LOCK};
 pub use topic::{event_topic, metric_topic};
 pub use types::{MetricEmit, MetricKind, SpectraEvent};
 pub use validate::{
-    clamp_event_paging, is_valid_spectra_ident, validate_spectra_ident, MAX_EVENT_QUERY_LIMIT,
-    MAX_EVENT_QUERY_OFFSET, MAX_SPECTRA_IDENT_LEN,
+    clamp_event_paging, is_valid_spectra_ident, validate_spectra_ident, CALLSITE_FIELD,
+    MAX_EVENT_QUERY_LIMIT, MAX_EVENT_QUERY_OFFSET, MAX_SPECTRA_IDENT_LEN,
 };
 
 /// Re-export for macro `inventory::submit!` in downstream crates.
