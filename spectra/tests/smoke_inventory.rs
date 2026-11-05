@@ -69,6 +69,7 @@ async fn emit_smoke_event_roundtrip() {
         .build()
         .expect("build spectra");
 
+    let log_line = line!() + 1;
     PlatformSmokeEventLogger::log("phase4 smoke".to_string());
     tokio::time::sleep(std::time::Duration::from_millis(80)).await;
 
@@ -84,4 +85,15 @@ async fn emit_smoke_event_roundtrip() {
         .await
         .expect("query events");
     assert_eq!(rows.len(), 1, "event should persist via mem backend");
+
+    let fields = &rows[0].fields;
+    assert_eq!(fields["message"], "phase4 smoke");
+    let callsite = &fields[spectra::CALLSITE_FIELD];
+    assert!(
+        callsite["file"]
+            .as_str()
+            .is_some_and(|f| f.ends_with("smoke_inventory.rs")),
+        "callsite file should be the caller, got {callsite}"
+    );
+    assert_eq!(callsite["line"], log_line);
 }

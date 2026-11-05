@@ -11,6 +11,9 @@ pub const MAX_EVENT_QUERY_OFFSET: u32 = 1_000_000;
 /// Maximum length for metric, table, and JSON field identifier tokens.
 pub const MAX_SPECTRA_IDENT_LEN: usize = 128;
 
+/// Reserved event field holding the `{file, line}` of the generated `*Logger` call.
+pub const CALLSITE_FIELD: &str = "_callsite";
+
 /// Validate a metric name, event table name, or JSON field key used in SQL builders.
 ///
 /// Accepted form: non-empty, at most [`MAX_SPECTRA_IDENT_LEN`] bytes, matching

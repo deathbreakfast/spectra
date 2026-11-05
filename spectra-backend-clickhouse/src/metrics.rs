@@ -6,7 +6,7 @@ use serde_json::Value;
 use spectra_backend_remote_common::RemoteMetricsBackend;
 use spectra_core::{
     MetricPoint, MetricWriteRow, MetricsQueryRange, MetricsStorageBackend, Result,
-    StorageEngineType,
+    StorageEngineType, StorageStats,
 };
 
 /// Remote ClickHouse metrics storage.
@@ -147,6 +147,10 @@ impl MetricsStorageBackend for ClickHouseMetricsBackend {
 
     async fn record_metrics_batch(&self, rows: &[MetricWriteRow]) -> Result<()> {
         self.0.record_metrics_batch(rows).await
+    }
+
+    async fn metric_stats(&self, name: &str) -> Result<StorageStats> {
+        self.0.metric_stats(name).await
     }
 
     async fn query_range(&self, query: MetricsQueryRange) -> Result<Vec<MetricPoint>> {

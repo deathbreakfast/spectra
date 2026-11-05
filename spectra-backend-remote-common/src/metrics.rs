@@ -6,8 +6,8 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use spectra_core::{
-    MetricPoint, MetricWriteRow, MetricsQueryRange, MetricsStorageBackend, Result,
-    StorageEngineType,
+    MetricPoint, MetricWriteRow, MetricsQueryRange, MetricsStorageBackend, PruneOutcome, Result,
+    StorageEngineType, StorageStats,
 };
 
 use crate::client::{
@@ -141,6 +141,21 @@ impl MetricsStorageBackend for RemoteMetricsBackend {
         }
     }
 
+    async fn metric_stats(&self, name: &str) -> Result<StorageStats> {
+        spectra_core::validate_spectra_ident(name)?;
+        match &self.inner {
+            MetricsInner::Mem(store) => Ok(store.metric_stats(name)),
+            MetricsInner::Remote(client) => {
+                let sql = format!(
+                    "SELECT toString(count()), toString(min(ts)), toString(max(ts)) \
+                     FROM spectra_metrics WHERE name = '{}'",
+                    query_sql::escape_str(name)?
+                );
+                client.query_stats(&sql).await
+            }
+        }
+    }
+
     async fn record_metrics_batch(&self, rows: &[MetricWriteRow]) -> Result<()> {
         if rows.is_empty() {
             return Ok(());
@@ -180,6 +195,26 @@ impl MetricsStorageBackend for RemoteMetricsBackend {
                 }
                 insert.end().await.map_err(map_remote)?;
                 Ok(())
+            }
+        }
+    }
+
+    async fn prune_before(&self, before: DateTime<Utc>, max_rows: u32) -> Result<PruneOutcome> {
+        match &self.inner {
+            MetricsInner::Mem(store) => Ok(PruneOutcome::capped(
+                store.prune_metrics(before, max_rows),
+                max_rows,
+            )),
+            MetricsInner::Remote(client) => {
+                // A ClickHouse mutation has no row cap and reports no count, so `max_rows`
+                // does not apply here; the time bound is the only limit.
+                let cutoff = query_sql::escape_str(&datetime_to_ch_ts(before))?;
+                client
+                    .execute(&format!(
+                        "ALTER TABLE spectra_metrics DELETE WHERE ts < '{cutoff}'"
+                    ))
+                    .await?;
+                Ok(PruneOutcome::default())
             }
         }
     }

@@ -244,4 +244,41 @@ mod tests {
         let reg = SchemaRegistry::new();
         assert_eq!(reg.list_schemas(), Vec::<&str>::new());
     }
+
+    fn schema(table: &str, store: &str) -> &'static SchemaMetadata {
+        Box::leak(Box::new(SchemaMetadata {
+            table_or_metric: table.to_string(),
+            store: store.to_string(),
+            ..Default::default()
+        }))
+    }
+
+    #[test]
+    fn distinct_store_names_sorted_deduped_with_default_happy() {
+        let mut reg = SchemaRegistry::new();
+        reg.register(schema("t_b", "b"));
+        reg.register(schema("t_a1", "a"));
+        reg.register(schema("t_a2", "a"));
+        assert_eq!(reg.distinct_store_names(), vec!["a", "b", "default"]);
+    }
+
+    #[test]
+    fn distinct_store_names_empty_registry_is_default_only_sad() {
+        let reg = SchemaRegistry::new();
+        assert_eq!(reg.distinct_store_names(), vec!["default"]);
+    }
+
+    #[test]
+    fn distinct_store_names_skips_empty_store_sad() {
+        let mut reg = SchemaRegistry::new();
+        reg.register(schema("t_blank", ""));
+        assert_eq!(reg.distinct_store_names(), vec!["default"]);
+    }
+
+    #[test]
+    fn collect_distinct_spectra_store_names_matches_global_registry() {
+        let names = collect_distinct_spectra_store_names();
+        assert_eq!(names, SchemaRegistry::global().distinct_store_names());
+        assert!(names.iter().any(|n| n == "default"));
+    }
 }

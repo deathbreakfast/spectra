@@ -217,6 +217,39 @@ pub struct EventWriteRow {
     pub correlation_id: Option<String>,
 }
 
+/// Row count and time range for one event table or metric family.
+///
+/// An empty or unknown table or metric reports zero rows and no timestamps.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StorageStats {
+    /// Number of stored rows (events) or samples (metrics).
+    pub rows: u64,
+    /// Earliest stored timestamp, `None` when there are no rows.
+    pub first_ts: Option<DateTime<Utc>>,
+    /// Latest stored timestamp, `None` when there are no rows.
+    pub last_ts: Option<DateTime<Utc>>,
+}
+
+/// One bounded prune call: how many rows went, and whether more may remain.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PruneOutcome {
+    /// Rows deleted by this call (0 when the engine cannot report a count).
+    pub deleted: u64,
+    /// True when the call hit its row cap, so another call may find more to delete.
+    pub more: bool,
+}
+
+impl PruneOutcome {
+    /// Outcome for a capped delete that removed `deleted` of at most `max_rows` rows.
+    #[must_use]
+    pub fn capped(deleted: u64, max_rows: u32) -> Self {
+        Self {
+            deleted,
+            more: deleted >= u64::from(max_rows),
+        }
+    }
+}
+
 /// Metrics storage: subscribers call `record_*`; explore UI calls `query_range`.
 #[async_trait]
 pub trait MetricsStorageBackend: Send + Sync {
@@ -244,6 +277,25 @@ pub trait MetricsStorageBackend: Send + Sync {
     /// Queries a time range of metric points.
     async fn query_range(&self, _query: MetricsQueryRange) -> Result<Vec<MetricPoint>> {
         Ok(Vec::new())
+    }
+
+    /// Returns the sample count and time range stored for one metric family.
+    ///
+    /// The default reports no data, so partial backends keep compiling.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the backing store cannot be read.
+    async fn metric_stats(&self, _name: &str) -> Result<StorageStats> {
+        Ok(StorageStats::default())
+    }
+
+    /// Deletes up to `max_rows` metric points older than `before`, oldest first.
+    ///
+    /// Retention applies to the whole metrics store. The default deletes nothing, so adapters
+    /// that cannot prune stay valid. Callers loop while [`PruneOutcome::more`] is set.
+    async fn prune_before(&self, _before: DateTime<Utc>, _max_rows: u32) -> Result<PruneOutcome> {
+        Ok(PruneOutcome::default())
     }
 
     /// Batch write metrics (default: per-row dispatch).
@@ -292,6 +344,30 @@ pub trait EventStorageBackend: Send + Sync {
             series: Vec::new(),
             headline: Vec::new(),
         })
+    }
+
+    /// Returns the row count and time range stored for one event table.
+    ///
+    /// The default reports no data, so partial backends keep compiling.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the backing store cannot be read.
+    async fn event_stats(&self, _table: &str) -> Result<StorageStats> {
+        Ok(StorageStats::default())
+    }
+
+    /// Deletes up to `max_rows` rows of `table` older than `before`, oldest first.
+    ///
+    /// The default deletes nothing, so adapters that cannot prune stay valid. Callers loop
+    /// while [`PruneOutcome::more`] is set.
+    async fn prune_before(
+        &self,
+        _table: &str,
+        _before: DateTime<Utc>,
+        _max_rows: u32,
+    ) -> Result<PruneOutcome> {
+        Ok(PruneOutcome::default())
     }
 
     /// Batch append event rows (default: per-row dispatch).

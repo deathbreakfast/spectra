@@ -462,8 +462,8 @@
 //! ```
 //!
 //! Event chart aggregates (`query_aggregate`) run in the database on ClickHouse and TensorBase.
-//! The mem and sqlite backends aggregate in process over at most
-//! [`spectra_core::MAX_EVENT_QUERY_LIMIT`] rows per query.
+//! The mem and sqlite backends aggregate in process over every row in the window; raw
+//! row queries stay capped at [`spectra_core::MAX_EVENT_QUERY_LIMIT`].
 //!
 //! Configuration (emit gates, sampling, buffers) is documented on
 //! [`spectra_core::SpectraConfig`].
@@ -476,8 +476,8 @@
 //!   `platform_smoke_*` schemas only.
 //! - Pin consumption via git tag (for example `v0.1.0`). Configure storage on
 //!   [`Spectra::builder()`].
-//! - Event chart aggregates on mem and sqlite cover at most
-//!   [`spectra_core::MAX_EVENT_QUERY_LIMIT`] rows; use a remote backend for large tables.
+//! - Event chart aggregates on mem and sqlite load every row in the window into memory; use a
+//!   remote backend for large tables.
 //! - Schema modules must be `mod`-linked into the binary or `inventory` will not see them.
 //! - Schema macros and helpers call through the `spectra` crate — pin `spectra` as a direct
 //!   dependency (no separate `spectra-core` pin required for the default recipe).
@@ -498,7 +498,7 @@ pub use spectra_core::{
     try_record_gauge_now, validate_spectra_ident, ChainedSink, Error, FieldClassification,
     LoggingKind, MetricEmit, RecordingSink, Result, SchemaFieldMetadata, SchemaMetadata,
     SchemaMetadataInit, SchemaRegistry, SpectraEvent, SpectraLevel, SpectraRouter, SpectraSink,
-    MAX_EVENT_QUERY_LIMIT, MAX_EVENT_QUERY_OFFSET, PII_MASK,
+    CALLSITE_FIELD, MAX_EVENT_QUERY_LIMIT, MAX_EVENT_QUERY_OFFSET, PII_MASK,
 };
 pub use spectra_macros::{spectra_metric, spectra_schema};
 pub use spectra_runtime::{

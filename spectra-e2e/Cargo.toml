@@ -11,6 +11,8 @@ spectra-testkit = { workspace = true }
 spectra = { workspace = true, default-features = false, features = ["mem"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 serde_json = "1"
+chrono = "0.4"
+serde = { version = "1", features = ["derive"] }
 
 [features]
 default = ["mem", "sqlite", "telemetry-console"]
@@ -24,6 +26,9 @@ telemetry-console = ["spectra-testkit/telemetry-console", "spectra/telemetry-con
 spectra-testkit = { workspace = true, features = ["mem", "sqlite", "tensorbase", "clickhouse"] }
 spectra = { workspace = true, features = ["mem", "sqlite", "tensorbase", "clickhouse"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+chrono = "0.4"
+tempfile = "3"
 
 [lints]
 workspace = true

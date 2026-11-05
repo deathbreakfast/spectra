@@ -20,7 +20,7 @@ use serde_json::Value;
 use spectra_core::{
     aggregate_event_rows, Error, EventAggregateResult, EventRow, EventStorageBackend,
     EventsAggregateFilter, EventsQueryFilter, LabelMatcher, MetricPoint, MetricsQueryRange,
-    MetricsStorageBackend, Result, StorageEngineType,
+    MetricsStorageBackend, PruneOutcome, Result, StorageEngineType, StorageStats,
 };
 
 const METRICS_DDL: &str = r"
@@ -65,6 +65,22 @@ fn open_and_migrate(path: &Path, ddl: &str) -> Result<Connection> {
 
 fn ts_to_rfc3339(ts: DateTime<Utc>) -> String {
     ts.to_rfc3339()
+}
+
+/// Runs a `COUNT(*), MIN(ts), MAX(ts)` query with one bound parameter.
+fn query_stats(conn: &Connection, sql: &str, key: &str) -> Result<StorageStats> {
+    let (rows, first, last): (i64, Option<String>, Option<String>) = conn
+        .query_row(sql, params![key], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })
+        .map_err(map_sqlite)?;
+    let rows = u64::try_from(rows)
+        .map_err(|e| Error::internal(format!("invalid sqlite row count {rows}: {e}")))?;
+    Ok(StorageStats {
+        rows,
+        first_ts: first.as_deref().map(parse_ts).transpose()?,
+        last_ts: last.as_deref().map(parse_ts).transpose()?,
+    })
 }
 
 fn parse_ts(s: &str) -> Result<DateTime<Utc>> {
@@ -171,6 +187,40 @@ impl SqliteMetricsBackend {
 impl MetricsStorageBackend for SqliteMetricsBackend {
     fn engine_type(&self) -> StorageEngineType {
         StorageEngineType::Sqlite
+    }
+
+    async fn metric_stats(&self, name: &str) -> Result<StorageStats> {
+        let conn = Arc::clone(&self.conn);
+        let name = name.to_string();
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.lock();
+            query_stats(
+                &conn,
+                "SELECT COUNT(*), MIN(ts), MAX(ts) FROM spectra_metrics WHERE name = ?1",
+                &name,
+            )
+        })
+        .await
+        .map_err(map_join)?
+    }
+
+    #[tracing::instrument(name = "spectra.sqlite.prune_before", skip(self))]
+    async fn prune_before(&self, before: DateTime<Utc>, max_rows: u32) -> Result<PruneOutcome> {
+        let conn = Arc::clone(&self.conn);
+        let before = ts_to_rfc3339(before);
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.lock();
+            let deleted = conn
+                .execute(
+                    "DELETE FROM spectra_metrics WHERE rowid IN \
+                     (SELECT rowid FROM spectra_metrics WHERE ts < ?1 ORDER BY ts LIMIT ?2)",
+                    params![before, max_rows],
+                )
+                .map_err(map_sqlite)?;
+            Ok(PruneOutcome::capped(deleted as u64, max_rows))
+        })
+        .await
+        .map_err(map_join)?
     }
 
     #[tracing::instrument(
@@ -327,6 +377,40 @@ pub struct SqliteEventsBackend {
 }
 
 impl SqliteEventsBackend {
+    /// Loads rows for `table` within the optional RFC 3339 time bounds, with no paging.
+    async fn scoped_rows(
+        &self,
+        table: String,
+        start: Option<String>,
+        end: Option<String>,
+    ) -> Result<Vec<EventRow>> {
+        let conn = Arc::clone(&self.conn);
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.lock();
+            let sql = "SELECT fields, ts FROM spectra_events WHERE table_name = ?1 \
+                 AND (?2 IS NULL OR ts >= ?2) AND (?3 IS NULL OR ts <= ?3)";
+            let mut stmt = conn.prepare(sql).map_err(map_sqlite)?;
+            let rows = stmt
+                .query_map(params![table, start, end], |row| {
+                    let fields: String = row.get(0)?;
+                    let ts: String = row.get(1)?;
+                    Ok((fields, ts))
+                })
+                .map_err(map_sqlite)?;
+            let mut out = Vec::new();
+            for row in rows {
+                let (fields, ts) = row.map_err(map_sqlite)?;
+                out.push(EventRow {
+                    ts: parse_ts(&ts)?,
+                    fields: serde_json::from_str(&fields)?,
+                });
+            }
+            Ok::<_, Error>(out)
+        })
+        .await
+        .map_err(map_join)?
+    }
+
     /// Open or create a SQLite database at `path` and apply events DDL migrations.
     ///
     /// The constructor is synchronous. Parent directories must already exist. Use a separate
@@ -364,6 +448,47 @@ impl EventStorageBackend for SqliteEventsBackend {
         StorageEngineType::Sqlite
     }
 
+    async fn event_stats(&self, table: &str) -> Result<StorageStats> {
+        let conn = Arc::clone(&self.conn);
+        let table = table.to_string();
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.lock();
+            query_stats(
+                &conn,
+                "SELECT COUNT(*), MIN(ts), MAX(ts) FROM spectra_events WHERE table_name = ?1",
+                &table,
+            )
+        })
+        .await
+        .map_err(map_join)?
+    }
+
+    #[tracing::instrument(name = "spectra.sqlite.prune_before", skip(self))]
+    async fn prune_before(
+        &self,
+        table: &str,
+        before: DateTime<Utc>,
+        max_rows: u32,
+    ) -> Result<PruneOutcome> {
+        let conn = Arc::clone(&self.conn);
+        let table = table.to_string();
+        let before = ts_to_rfc3339(before);
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.lock();
+            let deleted = conn
+                .execute(
+                    "DELETE FROM spectra_events WHERE rowid IN \
+                     (SELECT rowid FROM spectra_events \
+                      WHERE table_name = ?1 AND ts < ?2 ORDER BY ts LIMIT ?3)",
+                    params![table, before, max_rows],
+                )
+                .map_err(map_sqlite)?;
+            Ok(PruneOutcome::capped(deleted as u64, max_rows))
+        })
+        .await
+        .map_err(map_join)?
+    }
+
     #[tracing::instrument(
         name = "spectra.sqlite.append_row",
         skip(self, fields),
@@ -396,36 +521,13 @@ impl EventStorageBackend for SqliteEventsBackend {
 
     #[tracing::instrument(name = "spectra.sqlite.query_rows", skip(self, filter), fields(table = %filter.table))]
     async fn query_rows(&self, filter: EventsQueryFilter) -> Result<Vec<EventRow>> {
-        let conn = Arc::clone(&self.conn);
-        let table = filter.table.clone();
-        let start = filter.start.map(ts_to_rfc3339);
-        let end = filter.end.map(ts_to_rfc3339);
-        // Fetch table/time-scoped candidates, then apply shared filter/sort/pagination
-        // so operator semantics match mem and remote-common mem store.
-        let out = tokio::task::spawn_blocking(move || {
-            let conn = conn.lock();
-            let sql = "SELECT fields, ts FROM spectra_events WHERE table_name = ?1 \
-                 AND (?2 IS NULL OR ts >= ?2) AND (?3 IS NULL OR ts <= ?3)";
-            let mut stmt = conn.prepare(sql).map_err(map_sqlite)?;
-            let rows = stmt
-                .query_map(params![table, start, end], |row| {
-                    let fields: String = row.get(0)?;
-                    let ts: String = row.get(1)?;
-                    Ok((fields, ts))
-                })
-                .map_err(map_sqlite)?;
-            let mut out = Vec::new();
-            for row in rows {
-                let (fields, ts) = row.map_err(map_sqlite)?;
-                out.push(EventRow {
-                    ts: parse_ts(&ts)?,
-                    fields: serde_json::from_str(&fields)?,
-                });
-            }
-            Ok::<_, Error>(out)
-        })
-        .await
-        .map_err(map_join)??;
+        let out = self
+            .scoped_rows(
+                filter.table.clone(),
+                filter.start.map(ts_to_rfc3339),
+                filter.end.map(ts_to_rfc3339),
+            )
+            .await?;
         let mut filter = filter;
         if filter.limit.is_none() {
             filter.limit = Some(1000);
@@ -435,18 +537,20 @@ impl EventStorageBackend for SqliteEventsBackend {
 
     async fn query_aggregate(&self, filter: EventsAggregateFilter) -> Result<EventAggregateResult> {
         let rows = self
-            .query_rows(EventsQueryFilter {
-                table: filter.table.clone(),
-                start: Some(filter.start),
-                end: Some(filter.end),
-                partition: filter.partition.clone(),
-                limit: None,
-                offset: None,
-                sort_field: None,
-                sort_desc: false,
-                filter: filter.filter.clone(),
-            })
+            .scoped_rows(
+                filter.table.clone(),
+                Some(ts_to_rfc3339(filter.start)),
+                Some(ts_to_rfc3339(filter.end)),
+            )
             .await?;
+        let rows = spectra_core::select_event_rows(
+            rows,
+            &EventsQueryFilter {
+                partition: filter.partition.clone(),
+                filter: filter.filter.clone(),
+                ..Default::default()
+            },
+        );
         Ok(aggregate_event_rows(filter.view, &filter, &rows))
     }
 }
@@ -477,6 +581,52 @@ mod tests {
             .await
             .expect("query");
         assert_eq!(points.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn sqlite_aggregate_counts_rows_past_query_cap() {
+        let dir = tempdir().expect("tempdir");
+        let backend = SqliteEventsBackend::new(dir.path().join("events.db")).expect("open");
+        let ts = Utc::now();
+        for _ in 0..1500 {
+            backend
+                .append_row("req", &json!({"x": 1}), ts, None)
+                .await
+                .expect("write");
+        }
+        let rows = backend
+            .query_rows(EventsQueryFilter {
+                table: "req".into(),
+                ..Default::default()
+            })
+            .await
+            .expect("rows");
+        assert_eq!(rows.len(), 1000);
+        let filter = EventsAggregateFilter {
+            table: "req".into(),
+            start: ts - Duration::seconds(1),
+            end: ts + Duration::seconds(1),
+            partition: None,
+            filter: Default::default(),
+            measure: Default::default(),
+            measure_field: None,
+            time_bucket_secs: Some(3600),
+            group_by_field: None,
+            row_fields: Vec::new(),
+            pivot_field: None,
+            view: spectra_core::EventExploreView::TimeSeries,
+        };
+        match backend.query_aggregate(filter).await.expect("aggregate") {
+            EventAggregateResult::TimeSeries { series, .. } => {
+                let total: f64 = series
+                    .iter()
+                    .flat_map(|s| s.points.iter())
+                    .map(|p| p.value)
+                    .sum();
+                assert!((total - 1500.0).abs() < f64::EPSILON, "total={total}");
+            }
+            other => panic!("unexpected result {other:?}"),
+        }
     }
 
     #[tokio::test]

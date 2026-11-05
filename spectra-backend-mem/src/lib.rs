@@ -18,7 +18,7 @@ use serde_json::Value;
 use spectra_core::{
     aggregate_event_rows, EventAggregateResult, EventRow, EventStorageBackend,
     EventsAggregateFilter, EventsQueryFilter, LabelMatcher, MetricPoint, MetricsQueryRange,
-    MetricsStorageBackend, Result, StorageEngineType,
+    MetricsStorageBackend, PruneOutcome, Result, StorageEngineType, StorageStats,
 };
 
 /// Non-durable in-memory metrics storage.
@@ -152,6 +152,46 @@ impl MetricsStorageBackend for MemMetricsBackend {
             })
             .collect())
     }
+
+    async fn metric_stats(&self, name: &str) -> Result<StorageStats> {
+        let guard = self.points.read();
+        let mut stats = StorageStats::default();
+        for p in guard.iter().filter(|p| p.name == name) {
+            stats.rows += 1;
+            stats.first_ts = Some(stats.first_ts.map_or(p.ts, |t| t.min(p.ts)));
+            stats.last_ts = Some(stats.last_ts.map_or(p.ts, |t| t.max(p.ts)));
+        }
+        Ok(stats)
+    }
+
+    async fn prune_before(&self, before: DateTime<Utc>, max_rows: u32) -> Result<PruneOutcome> {
+        let mut guard = self.points.write();
+        let deleted = drain_oldest(&mut guard, max_rows, |p| p.ts, before);
+        Ok(PruneOutcome::capped(deleted, max_rows))
+    }
+}
+
+/// Removes up to `max_rows` entries with `ts < before`, oldest first; returns the count.
+fn drain_oldest<T>(
+    rows: &mut Vec<T>,
+    max_rows: u32,
+    ts_of: impl Fn(&T) -> DateTime<Utc>,
+    before: DateTime<Utc>,
+) -> u64 {
+    let mut stale: Vec<(DateTime<Utc>, usize)> = rows
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| ts_of(r) < before)
+        .map(|(i, r)| (ts_of(r), i))
+        .collect();
+    stale.sort();
+    stale.truncate(max_rows as usize);
+    let mut idx: Vec<usize> = stale.into_iter().map(|(_, i)| i).collect();
+    idx.sort_unstable_by(|a, b| b.cmp(a));
+    for i in &idx {
+        rows.remove(*i);
+    }
+    idx.len() as u64
 }
 
 /// Non-durable in-memory structured-event storage keyed by logical table name.
@@ -271,21 +311,57 @@ impl EventStorageBackend for MemEventsBackend {
         Ok(spectra_core::finalize_event_rows(out, &filter))
     }
 
+    async fn event_stats(&self, table: &str) -> Result<StorageStats> {
+        let guard = self.rows.read();
+        let Some(rows) = guard.get(table) else {
+            return Ok(StorageStats::default());
+        };
+        Ok(StorageStats {
+            rows: rows.len() as u64,
+            first_ts: rows.iter().map(|r| r.ts).min(),
+            last_ts: rows.iter().map(|r| r.ts).max(),
+        })
+    }
+
     async fn query_aggregate(&self, filter: EventsAggregateFilter) -> Result<EventAggregateResult> {
-        let rows = self
-            .query_rows(EventsQueryFilter {
-                table: filter.table.clone(),
-                start: Some(filter.start),
-                end: Some(filter.end),
-                partition: filter.partition.clone(),
-                limit: None,
-                offset: None,
-                sort_field: None,
-                sort_desc: false,
-                filter: filter.filter.clone(),
-            })
-            .await?;
+        let rows = {
+            let guard = self.rows.read();
+            let scoped: Vec<EventRow> = guard
+                .get(&filter.table)
+                .map(|rows| {
+                    rows.iter()
+                        .filter(|r| r.ts >= filter.start && r.ts <= filter.end)
+                        .map(|r| EventRow {
+                            ts: r.ts,
+                            fields: r.fields.clone(),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            spectra_core::select_event_rows(
+                scoped,
+                &EventsQueryFilter {
+                    partition: filter.partition.clone(),
+                    filter: filter.filter.clone(),
+                    ..Default::default()
+                },
+            )
+        };
         Ok(aggregate_event_rows(filter.view, &filter, &rows))
+    }
+
+    async fn prune_before(
+        &self,
+        table: &str,
+        before: DateTime<Utc>,
+        max_rows: u32,
+    ) -> Result<PruneOutcome> {
+        let mut guard = self.rows.write();
+        let Some(rows) = guard.get_mut(table) else {
+            return Ok(PruneOutcome::default());
+        };
+        let deleted = drain_oldest(rows, max_rows, |r| r.ts, before);
+        Ok(PruneOutcome::capped(deleted, max_rows))
     }
 }
 
@@ -324,6 +400,51 @@ mod tests {
             .expect("query");
         assert_eq!(points.len(), 1);
         assert!((points[0].value - 3.0).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn aggregate_counts_rows_past_query_cap() {
+        let backend = MemEventsBackend::new();
+        let ts = Utc::now();
+        for _ in 0..1500 {
+            backend
+                .append_row("req_log", &json!({"msg": "ok"}), ts, None)
+                .await
+                .expect("write");
+        }
+        let rows = backend
+            .query_rows(EventsQueryFilter {
+                table: "req_log".into(),
+                ..Default::default()
+            })
+            .await
+            .expect("rows");
+        assert_eq!(rows.len(), 1000);
+        let filter = EventsAggregateFilter {
+            table: "req_log".into(),
+            start: ts - Duration::seconds(1),
+            end: ts + Duration::seconds(1),
+            partition: None,
+            filter: Default::default(),
+            measure: Default::default(),
+            measure_field: None,
+            time_bucket_secs: Some(3600),
+            group_by_field: None,
+            row_fields: Vec::new(),
+            pivot_field: None,
+            view: spectra_core::EventExploreView::TimeSeries,
+        };
+        match backend.query_aggregate(filter).await.expect("aggregate") {
+            EventAggregateResult::TimeSeries { series, .. } => {
+                let total: f64 = series
+                    .iter()
+                    .flat_map(|s| s.points.iter())
+                    .map(|p| p.value)
+                    .sum();
+                assert!((total - 1500.0).abs() < f64::EPSILON, "total={total}");
+            }
+            other => panic!("unexpected result {other:?}"),
+        }
     }
 
     #[tokio::test]

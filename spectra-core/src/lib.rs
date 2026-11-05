@@ -13,7 +13,7 @@
 //! - **Input validation** — [`validate_spectra_ident`] for metric/table/field tokens;
 //!   [`clamp_event_paging`] bounds event query `limit`/`offset`.
 //! - **Field classification** — [`FieldClassification`] plus [`mask_field_value`] for host/UI
-//!   display (PII / console safety). Query authz remains a host concern.
+//!   display (PII / console safety); [`rows_to_event_result`] masks PII fields itself. Query authz remains a host concern.
 //!
 //! # Entry points
 //!
@@ -22,7 +22,7 @@
 //! | Wire sink | [`set_sink`] |
 //! | Emit | [`try_record_counter`], [`try_log_event`], … |
 //! | Gate | [`install_config`], [`SpectraConfig::from_env`] |
-//! | Mask PII | [`mask_field_value`] |
+//! | Mask PII | [`mask_field_value`], [`mask_pii_fields`] |
 //! | Validate names | [`validate_spectra_ident`] |
 //! | Page bounds | [`clamp_event_paging`], [`MAX_EVENT_QUERY_LIMIT`] |
 //!
@@ -60,7 +60,7 @@ mod topic;
 mod types;
 mod validate;
 
-pub use classification::{mask_field_value, FieldClassification, PII_MASK};
+pub use classification::{mask_field_value, mask_pii_fields, FieldClassification, PII_MASK};
 pub use config::{install_config, EmitPolicy, NameOverride, SpectraConfig};
 pub use emit_buffer::{
     current_emit_ts, drain, is_active, job_enabled, request_enabled, request_scope, with_emit_ts,
@@ -74,7 +74,7 @@ pub use entry::{
 pub use error::{Error, Result};
 pub use event_filter::{
     finalize_event_rows, matches_filter_item, paginate_event_rows, row_matches_filter,
-    row_matches_partition, sort_event_rows,
+    row_matches_partition, select_event_rows, sort_event_rows,
 };
 pub use query::{
     EventAggregateRequest, EventAggregateResult, EventAggregationSpec, EventExploreView,
@@ -105,14 +105,15 @@ pub use sinks::{ChainedSink, CountingSink, NdjsonFileSink, NoOpSink, RecordingSi
 pub use storage::{
     EventRow, EventStorageBackend, EventWriteRow, EventsAggregateFilter, EventsQueryFilter,
     MetricPoint, MetricWriteRow, MetricsQueryRange, MetricsStorageBackend, NoOpEventBackend,
-    NoOpMetricsBackend, SharedEventBackend, SharedMetricsBackend, StorageEngineType,
+    NoOpMetricsBackend, PruneOutcome, SharedEventBackend, SharedMetricsBackend, StorageEngineType,
+    StorageStats,
 };
 pub use test_util::{reset_config_and_sink_for_test, GLOBAL_TEST_LOCK};
 pub use topic::{event_topic, metric_topic};
 pub use types::{MetricEmit, MetricKind, SpectraEvent};
 pub use validate::{
-    clamp_event_paging, is_valid_spectra_ident, validate_spectra_ident, MAX_EVENT_QUERY_LIMIT,
-    MAX_EVENT_QUERY_OFFSET, MAX_SPECTRA_IDENT_LEN,
+    clamp_event_paging, is_valid_spectra_ident, validate_spectra_ident, CALLSITE_FIELD,
+    MAX_EVENT_QUERY_LIMIT, MAX_EVENT_QUERY_OFFSET, MAX_SPECTRA_IDENT_LEN,
 };
 
 /// Re-export for macro `inventory::submit!` in downstream crates.

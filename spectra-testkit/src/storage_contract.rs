@@ -8,7 +8,7 @@ use spectra::spectra_core::LabelMatcher;
 use spectra::spectra_core::{
     EventAggregateResult, EventExploreView, EventMeasure, EventStorageBackend,
     EventsAggregateFilter, EventsQueryFilter, GridFilterItem, GridFilterModel, GridFilterOperator,
-    MetricsQueryRange, MetricsStorageBackend, Result,
+    MetricsQueryRange, MetricsStorageBackend, Result, StorageEngineType, StorageStats,
 };
 
 /// Run the shared storage port contract against one metrics/events backend pair.
@@ -24,9 +24,26 @@ pub async fn run_storage_contract(
     event_sort_and_pagination(events.as_ref()).await?;
     event_partition_filter(events.as_ref()).await?;
     event_aggregate_views(events.as_ref()).await?;
+    event_aggregate_beyond_query_cap(events.as_ref()).await?;
+    event_stats_roundtrip(events.as_ref()).await?;
+    metric_stats_roundtrip(metrics.as_ref()).await?;
     label_filter_hit(metrics.as_ref()).await?;
     label_filter_miss(metrics.as_ref()).await?;
     time_range_empty(metrics.as_ref()).await?;
+    // Remote engines prune with an asynchronous, uncapped mutation, so only the embedded
+    // engines can assert exact bounded results here.
+    if matches!(
+        events.engine_type(),
+        StorageEngineType::Mem | StorageEngineType::Sqlite
+    ) {
+        event_prune(events.as_ref()).await?;
+    }
+    if matches!(
+        metrics.engine_type(),
+        StorageEngineType::Mem | StorageEngineType::Sqlite
+    ) {
+        metrics_prune(metrics.as_ref()).await?;
+    }
     Ok(())
 }
 
@@ -316,8 +333,12 @@ async fn event_aggregate_views(events: &dyn EventStorageBackend) -> Result<()> {
     let pie = events.query_aggregate(by_severity.clone()).await?;
     assert_eq!(
         slices(&pie),
-        vec![("info".to_string(), 2.0), ("warn".to_string(), 1.0)],
-        "aggregate pie count excludes rows without the group field"
+        vec![
+            ("(blank)".to_string(), 1.0),
+            ("info".to_string(), 2.0),
+            ("warn".to_string(), 1.0)
+        ],
+        "aggregate pie count buckets rows without the group field as (blank)"
     );
 
     let bar = events
@@ -407,6 +428,51 @@ async fn event_aggregate_views(events: &dyn EventStorageBackend) -> Result<()> {
     Ok(())
 }
 
+/// Aggregates count every matching row, even past the 1,000-row event query cap.
+async fn event_aggregate_beyond_query_cap(events: &dyn EventStorageBackend) -> Result<()> {
+    const ROWS: u32 = 1100;
+    let ts = Utc::now();
+    let table = "contract_aggregate_large";
+    for i in 0..ROWS {
+        let severity = if i % 2 == 0 { "info" } else { "warn" };
+        events
+            .append_row(table, &json!({"severity": severity}), ts, None)
+            .await?;
+    }
+    let base = EventsAggregateFilter {
+        table: table.into(),
+        start: ts - Duration::seconds(1),
+        end: ts + Duration::seconds(1),
+        partition: None,
+        filter: GridFilterModel::default(),
+        measure: EventMeasure::Count,
+        measure_field: None,
+        time_bucket_secs: Some(60),
+        group_by_field: None,
+        row_fields: Vec::new(),
+        pivot_field: None,
+        view: EventExploreView::TimeSeries,
+    };
+    let count = events.query_aggregate(base.clone()).await?;
+    assert_eq!(series_total(&count), f64::from(ROWS), "count past row cap");
+
+    let pie = events
+        .query_aggregate(EventsAggregateFilter {
+            group_by_field: Some("severity".into()),
+            view: EventExploreView::PieChart,
+            ..base
+        })
+        .await?;
+    let mut got = slices(&pie);
+    got.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        got,
+        vec![("info".into(), 550.0), ("warn".into(), 550.0)],
+        "pie slices past row cap"
+    );
+    Ok(())
+}
+
 fn series_total(result: &EventAggregateResult) -> f64 {
     match result {
         EventAggregateResult::TimeSeries { series, .. } => series
@@ -425,4 +491,124 @@ fn slices(result: &EventAggregateResult) -> Vec<(String, f64)> {
         }
         other => panic!("expected slices, got {other:?}"),
     }
+}
+
+async fn event_stats_roundtrip(events: &dyn EventStorageBackend) -> Result<()> {
+    let missing = events.event_stats("contract_stats_missing").await?;
+    assert_eq!(missing, StorageStats::default(), "unknown table is empty");
+
+    let base = Utc::now();
+    let table = "contract_stats_events";
+    // Written out of order so min/max cannot just be first/last insert.
+    let times = [
+        base + Duration::seconds(5),
+        base,
+        base + Duration::seconds(10),
+    ];
+    for ts in times {
+        events.append_row(table, &json!({"n": 1}), ts, None).await?;
+    }
+    events
+        .append_row(
+            "contract_stats_other",
+            &json!({}),
+            base - Duration::hours(1),
+            None,
+        )
+        .await?;
+    let stats = events.event_stats(table).await?;
+    assert_eq!(stats.rows, 3, "event stats row count");
+    assert_eq!(stats.first_ts, Some(base), "event stats first_ts");
+    assert_eq!(
+        stats.last_ts,
+        Some(base + Duration::seconds(10)),
+        "event stats last_ts"
+    );
+    Ok(())
+}
+
+async fn metric_stats_roundtrip(metrics: &dyn MetricsStorageBackend) -> Result<()> {
+    let missing = metrics.metric_stats("contract_stats_missing").await?;
+    assert_eq!(missing, StorageStats::default(), "unknown metric is empty");
+
+    let base = Utc::now();
+    let name = "contract_stats_metric";
+    metrics
+        .record_counter(name, &json!({}), 1, base + Duration::seconds(7))
+        .await?;
+    metrics.record_gauge(name, &json!({}), 2.0, base).await?;
+    metrics
+        .record_counter(
+            "contract_stats_other_metric",
+            &json!({}),
+            1,
+            base - Duration::hours(1),
+        )
+        .await?;
+    let stats = metrics.metric_stats(name).await?;
+    assert_eq!(stats.rows, 2, "metric stats row count");
+    assert_eq!(stats.first_ts, Some(base), "metric stats first_ts");
+    assert_eq!(
+        stats.last_ts,
+        Some(base + Duration::seconds(7)),
+        "metric stats last_ts"
+    );
+    Ok(())
+}
+
+async fn event_prune(events: &dyn EventStorageBackend) -> Result<()> {
+    let now = Utc::now();
+    let old = now - Duration::days(10);
+    let cutoff = now - Duration::days(1);
+    for _ in 0..3 {
+        events
+            .append_row("contract_prune", &json!({"age": "old"}), old, None)
+            .await?;
+    }
+    events
+        .append_row("contract_prune", &json!({"age": "new"}), now, None)
+        .await?;
+    events
+        .append_row("contract_prune_other", &json!({"age": "old"}), old, None)
+        .await?;
+
+    let first = events.prune_before("contract_prune", cutoff, 2).await?;
+    assert_eq!((first.deleted, first.more), (2, true), "capped prune");
+    let second = events.prune_before("contract_prune", cutoff, 2).await?;
+    assert_eq!((second.deleted, second.more), (1, false), "final prune");
+
+    let rows = |table: &str| EventsQueryFilter {
+        table: table.into(),
+        start: Some(old - Duration::days(1)),
+        end: Some(now + Duration::seconds(1)),
+        ..Default::default()
+    };
+    let kept = events.query_rows(rows("contract_prune")).await?;
+    assert_eq!(kept.len(), 1, "recent row survives prune");
+    let other = events.query_rows(rows("contract_prune_other")).await?;
+    assert_eq!(other.len(), 1, "other table untouched");
+    Ok(())
+}
+
+async fn metrics_prune(metrics: &dyn MetricsStorageBackend) -> Result<()> {
+    let now = Utc::now();
+    let old = now - Duration::days(10);
+    metrics
+        .record_counter("contract_prune_hits", &json!({}), 1, old)
+        .await?;
+    metrics
+        .record_counter("contract_prune_hits", &json!({}), 1, now)
+        .await?;
+    let outcome = metrics.prune_before(now - Duration::days(1), 100).await?;
+    assert!(outcome.deleted >= 1 && !outcome.more, "metrics prune");
+    let points = metrics
+        .query_range(MetricsQueryRange {
+            metric_name: "contract_prune_hits".into(),
+            start: old - Duration::days(1),
+            end: now + Duration::seconds(1),
+            label_matchers: vec![],
+        })
+        .await?;
+    assert_eq!(points.len(), 1, "recent metric survives prune");
+    Ok(())
 }

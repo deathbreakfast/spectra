@@ -8,7 +8,8 @@ use serde_json::{json, Value};
 use spectra_core::{
     aggregate_event_rows, aggregate_rows_to_result, pivot_from_cells, Error, EventAggregateResult,
     EventExploreView, EventRow, EventStorageBackend, EventWriteRow, EventsAggregateFilter,
-    EventsQueryFilter, PivotCell, Result, StorageEngineType,
+    EventsQueryFilter, PivotCell, PruneOutcome, Result, StorageEngineType, StorageStats,
+    PIVOT_BLANK_LABEL,
 };
 
 use crate::client::{
@@ -138,6 +139,34 @@ impl EventStorageBackend for RemoteEventsBackend {
         }
     }
 
+    async fn prune_before(
+        &self,
+        table: &str,
+        before: DateTime<Utc>,
+        max_rows: u32,
+    ) -> Result<PruneOutcome> {
+        match &self.inner {
+            EventsInner::Mem(store) => Ok(PruneOutcome::capped(
+                store.prune_events(table, before, max_rows),
+                max_rows,
+            )),
+            EventsInner::Remote(client) => {
+                spectra_core::validate_spectra_ident(table)?;
+                // A ClickHouse mutation has no row cap and reports no count, so `max_rows`
+                // does not apply here; the time bound is the only limit.
+                let table = query_sql::escape_str(table)?;
+                let cutoff = query_sql::escape_str(&datetime_to_ch_ts(before))?;
+                client
+                    .execute(&format!(
+                        "ALTER TABLE spectra_events DELETE \
+                         WHERE table_name = '{table}' AND ts < '{cutoff}'"
+                    ))
+                    .await?;
+                Ok(PruneOutcome::default())
+            }
+        }
+    }
+
     async fn query_rows(&self, filter: EventsQueryFilter) -> Result<Vec<EventRow>> {
         match &self.inner {
             EventsInner::Mem(store) => store.query_rows(filter),
@@ -162,17 +191,33 @@ impl EventStorageBackend for RemoteEventsBackend {
         }
     }
 
+    async fn event_stats(&self, table: &str) -> Result<StorageStats> {
+        spectra_core::validate_spectra_ident(table)?;
+        match &self.inner {
+            EventsInner::Mem(store) => Ok(store.event_stats(table)),
+            EventsInner::Remote(client) => {
+                let sql = format!(
+                    "SELECT toString(count()), toString(min(ts)), toString(max(ts)) \
+                     FROM spectra_events WHERE table_name = '{}'",
+                    query_sql::escape_str(table)?
+                );
+                client.query_stats(&sql).await
+            }
+        }
+    }
+
     async fn query_aggregate(&self, filter: EventsAggregateFilter) -> Result<EventAggregateResult> {
         match &self.inner {
             EventsInner::Mem(store) => {
-                let rows = store.query_rows(EventsQueryFilter {
-                    table: filter.table.clone(),
-                    start: Some(filter.start),
-                    end: Some(filter.end),
-                    partition: filter.partition.clone(),
-                    filter: filter.filter.clone(),
-                    ..Default::default()
-                })?;
+                let rows = store.scoped_rows(&filter.table, filter.start, filter.end);
+                let rows = spectra_core::select_event_rows(
+                    rows,
+                    &EventsQueryFilter {
+                        partition: filter.partition.clone(),
+                        filter: filter.filter.clone(),
+                        ..Default::default()
+                    },
+                );
                 Ok(aggregate_event_rows(filter.view, &filter, &rows))
             }
             EventsInner::Remote(client) => {
@@ -220,7 +265,10 @@ fn aggregate_result_from_groups(
             Ok(aggregate_rows_to_result(filter.view, rows, filter.measure))
         }
         EventExploreView::PieChart | EventExploreView::BarChart => {
-            if groups.is_empty() {
+            // A lone blank group means no row carried a value for the field.
+            let only_blank =
+                matches!(groups.as_slice(), [(label, _)] if label == PIVOT_BLANK_LABEL);
+            if groups.is_empty() || only_blank {
                 return Ok(EventAggregateResult::Slices {
                     slices: Vec::new(),
                     headline: Vec::new(),

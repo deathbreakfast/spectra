@@ -111,6 +111,28 @@ let spectra = Spectra::builder()
 // Emits fan out to transport synchronously, then async storage persist (default).
 ```
 
+### Multiple stores
+
+Each schema declares a `store:` name. By default every store lands on the backend pair you set with `metrics_backend` and `events_backend`. To give a store its own backends, register it on the builder:
+
+```rust
+use std::sync::Arc;
+use spectra::{MemEventsBackend, MemMetricsBackend, Spectra};
+
+let spectra = Spectra::builder()
+    .metrics_backend(Arc::new(MemMetricsBackend::new())) // "default" store
+    .events_backend(Arc::new(MemEventsBackend::new()))
+    .store_backend(
+        "billing",
+        Arc::new(MemMetricsBackend::new()),
+        Arc::new(MemEventsBackend::new()),
+    )
+    .embedded()
+    .build()?;
+```
+
+Schemas declared with `store: "billing"` write to and query from the billing pair. A store with no `store_backend` entry falls back to the default pair, and registering the same name twice keeps the last one. `spectra::spectra_core::collect_distinct_spectra_store_names()` lists the store names your linked schemas declare, so a host can register one pair per name instead of hardcoding them. The ClickHouse and TensorBase connectors can open a dedicated database per store on the same server. `spectra-e2e/tests/store_routing.rs` covers the routing and fallback behavior.
+
 ### Examples (canonical path)
 
 Full runbooks: [`spectra/README.md` — How to run examples](spectra/README.md#how-to-run-examples).
@@ -134,6 +156,30 @@ API details: [`spectra/README.md`](spectra/README.md) and `cargo doc -p uf-spect
 ([Direct persist](https://docs.rs/uf-spectra/latest/spectra/index.html#direct-persist-one-binary) /
 [Publish-consume](https://docs.rs/uf-spectra/latest/spectra/index.html#publish-consume-two-binaries) /
 [Dual-path](https://docs.rs/uf-spectra/latest/spectra/index.html#dual-path-optional)).
+
+## Retention
+
+Stores grow until something deletes from them. Pass a `RetentionConfig` to the builder to
+prune on a schedule:
+
+```rust
+Spectra::builder()
+    // ... backends ...
+    .retention(RetentionConfig {
+        metrics_days: Some(30),
+        default_event_days: Some(14),
+        table_days: [("audit_log".to_string(), 90)].into(),
+        ..Default::default()
+    })
+```
+
+Pruning is off unless you set it. Each run deletes in batches of `batch_rows` (5000), at most
+`max_batches` (20) per store and table, so a store that is far behind catches up over
+several runs. The mem and SQLite backends enforce the row cap exactly. ClickHouse and
+TensorBase issue one `ALTER TABLE ... DELETE` per run, which has no row cap and finishes in
+the background. `FieldClassification::retention_days` is metadata only; retention comes from
+`RetentionConfig`. If your host has its own scheduler, build a `RetentionPruner` and call
+`prune_once` from a job instead of using the builder.
 
 ## Logging surfaces
 
@@ -169,6 +215,7 @@ API details: [`spectra/README.md`](spectra/README.md) and `cargo doc -p uf-spect
 | `spectra-macros` | `spectra_schema!`, `spectra_metric!` (helpers + topics + inventory) |
 | `spectra-backend-*` | Feature-gated storage adapters |
 | `spectra-runtime` | `SpectraBuilder`, composite sink, install |
+| `spectra-photon` | Photon publish sink and batched consumer-group storage writer |
 | `uf-spectra` (`spectra`) | Primary public crate |
 | `spectra-testkit` / `spectra-e2e` / `spectra-bench` | Matrix verification and benchmarks |
 
