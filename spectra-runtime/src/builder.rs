@@ -10,6 +10,7 @@ use spectra_core::{
 
 use crate::persist_config::PersistConfig;
 use crate::persist_sink::{PersistHandle, StoragePersistSink};
+use crate::retention::{RetentionConfig, RetentionHandle, RetentionPruner};
 
 #[cfg(feature = "telemetry-console")]
 use crate::async_writer::OffThreadSpectraSink;
@@ -45,6 +46,8 @@ use std::path::Path;
 pub struct Spectra {
     router: Arc<SpectraRouter>,
     persist: Option<PersistHandle>,
+    /// Keeps the scheduled retention prune alive; dropped with the runtime.
+    _retention: Option<RetentionHandle>,
     /// Topology marker from [`SpectraBuilder::embedded`] (does not select backends).
     embedded: bool,
 }
@@ -145,6 +148,7 @@ pub struct SpectraBuilder {
     persist_events: Option<SharedEventBackend>,
     persist_store_metrics: HashMap<String, SharedMetricsBackend>,
     persist_store_events: HashMap<String, SharedEventBackend>,
+    retention: Option<RetentionConfig>,
 }
 
 impl Default for SpectraBuilder {
@@ -170,6 +174,7 @@ impl SpectraBuilder {
             persist_events: None,
             persist_store_metrics: HashMap::new(),
             persist_store_events: HashMap::new(),
+            retention: None,
         }
     }
 
@@ -312,6 +317,40 @@ impl SpectraBuilder {
         self
     }
 
+    /// Prune old metrics and event rows on a schedule (off unless set).
+    ///
+    /// [`Self::build`] must then run inside a tokio runtime, which hosts the prune loop for
+    /// the life of the returned [`Spectra`]. See [`RetentionConfig`] for what is kept and
+    /// how much one run may delete. Hosts with their own scheduler can build a
+    /// [`RetentionPruner`] directly instead.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use std::sync::Arc;
+    /// use spectra_backend_mem::{MemEventsBackend, MemMetricsBackend};
+    /// use spectra_runtime::{RetentionConfig, Spectra};
+    ///
+    /// # async fn example() -> spectra_core::Result<()> {
+    /// let spectra = Spectra::builder()
+    ///     .metrics_backend(Arc::new(MemMetricsBackend::new()))
+    ///     .events_backend(Arc::new(MemEventsBackend::new()))
+    ///     .retention(RetentionConfig {
+    ///         metrics_days: Some(30),
+    ///         default_event_days: Some(14),
+    ///         ..Default::default()
+    ///     })
+    ///     .embedded()
+    ///     .build()?;
+    /// # let _ = spectra;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn retention(mut self, config: RetentionConfig) -> Self {
+        self.retention = Some(config);
+        self
+    }
+
     /// Optional transport or telemetry sink (invoked before async storage persist when enabled).
     ///
     /// Use this for the **publisher** side of distributed ingest: your [`SpectraSink`]
@@ -409,6 +448,8 @@ impl SpectraBuilder {
             Arc::new(self.build_write_router(&metrics, &events, SchemaRegistry::global()))
         });
 
+        let mut metrics_backends = vec![Arc::clone(&metrics)];
+        metrics_backends.extend(self.store_metrics.values().cloned());
         let router = build_router(metrics, events, self.store_metrics, self.store_events);
         let router = Arc::new(router);
         let write_router = write_router.unwrap_or_else(|| Arc::clone(&router));
@@ -447,9 +488,41 @@ impl SpectraBuilder {
             };
         set_sink(installed);
 
+        let retention = match self.retention {
+            Some(config) => {
+                if tokio::runtime::Handle::try_current().is_err() {
+                    return Err(spectra_core::Error::config(
+                        "SpectraBuilder: retention needs a tokio runtime; call build() inside one",
+                    ));
+                }
+                let registry = SchemaRegistry::global();
+                let event_tables = registry
+                    .list_schemas()
+                    .into_iter()
+                    .filter(|name| {
+                        registry
+                            .get_schema(name)
+                            .is_some_and(|m| m.logging_kind == LoggingKind::Event)
+                    })
+                    .map(str::to_string)
+                    .collect();
+                Some(
+                    RetentionPruner::new(
+                        config,
+                        Arc::clone(&router),
+                        metrics_backends,
+                        event_tables,
+                    )
+                    .spawn(),
+                )
+            }
+            None => None,
+        };
+
         Ok(Spectra {
             router,
             persist: persist_handle,
+            _retention: retention,
             embedded: self.embedded,
         })
     }

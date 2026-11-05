@@ -105,7 +105,8 @@ pub use sinks::{ChainedSink, CountingSink, NdjsonFileSink, NoOpSink, RecordingSi
 pub use storage::{
     EventRow, EventStorageBackend, EventWriteRow, EventsAggregateFilter, EventsQueryFilter,
     MetricPoint, MetricWriteRow, MetricsQueryRange, MetricsStorageBackend, NoOpEventBackend,
-    NoOpMetricsBackend, SharedEventBackend, SharedMetricsBackend, StorageEngineType, StorageStats,
+    NoOpMetricsBackend, PruneOutcome, SharedEventBackend, SharedMetricsBackend, StorageEngineType,
+    StorageStats,
 };
 pub use test_util::{reset_config_and_sink_for_test, GLOBAL_TEST_LOCK};
 pub use topic::{event_topic, metric_topic};

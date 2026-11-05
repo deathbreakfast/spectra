@@ -5,6 +5,8 @@
 //! - [`Spectra::builder()`] / [`SpectraBuilder`] — inject backends, optional transport sink, and
 //!   topology flags
 //! - [`SpectraBuilder::persist`] — L2 queue/batch settings ([`PersistConfig`]; no env knobs)
+//! - [`SpectraBuilder::retention`] — scheduled, bounded prune of old metrics and event rows
+//!   ([`RetentionConfig`]; off unless configured)
 //! - [`Spectra::flush_persist`] — durable barrier after `*_now` emits (Write Now scripts)
 //! - [`SpectraBuilder::sink`] + [`SpectraBuilder::persist_disabled`] — **publisher** wiring for
 //!   publish-consume ingest (consumers own storage; see `spectra` **Getting started → Publish-consume**)
@@ -17,6 +19,7 @@ mod async_writer;
 mod builder;
 mod persist_config;
 mod persist_sink;
+mod retention;
 
 pub use async_writer::{
     console_mirror_enabled, format_console_line, off_thread_emit_enabled, OffThreadSpectraSink,
@@ -24,3 +27,4 @@ pub use async_writer::{
 pub use builder::{Spectra, SpectraBuilder};
 pub use persist_config::{PersistConfig, PersistOverflow};
 pub use persist_sink::{PersistHandle, StoragePersistSink};
+pub use retention::{PruneReport, RetentionConfig, RetentionHandle, RetentionPruner};

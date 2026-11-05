@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use spectra_core::{
-    MetricPoint, MetricWriteRow, MetricsQueryRange, MetricsStorageBackend, Result,
+    MetricPoint, MetricWriteRow, MetricsQueryRange, MetricsStorageBackend, PruneOutcome, Result,
     StorageEngineType, StorageStats,
 };
 
@@ -195,6 +195,26 @@ impl MetricsStorageBackend for RemoteMetricsBackend {
                 }
                 insert.end().await.map_err(map_remote)?;
                 Ok(())
+            }
+        }
+    }
+
+    async fn prune_before(&self, before: DateTime<Utc>, max_rows: u32) -> Result<PruneOutcome> {
+        match &self.inner {
+            MetricsInner::Mem(store) => Ok(PruneOutcome::capped(
+                store.prune_metrics(before, max_rows),
+                max_rows,
+            )),
+            MetricsInner::Remote(client) => {
+                // A ClickHouse mutation has no row cap and reports no count, so `max_rows`
+                // does not apply here; the time bound is the only limit.
+                let cutoff = query_sql::escape_str(&datetime_to_ch_ts(before))?;
+                client
+                    .execute(&format!(
+                        "ALTER TABLE spectra_metrics DELETE WHERE ts < '{cutoff}'"
+                    ))
+                    .await?;
+                Ok(PruneOutcome::default())
             }
         }
     }
