@@ -493,12 +493,12 @@ pub mod topics;
 /// Re-export for schema macro `inventory::submit!` expansions.
 pub use spectra_core::inventory;
 pub use spectra_core::{
-    self, clamp_event_paging, mask_field_value, try_log_event_at, try_log_event_now,
-    try_record_counter, try_record_counter_at, try_record_counter_now, try_record_gauge_at,
-    try_record_gauge_now, validate_spectra_ident, ChainedSink, Error, FieldClassification,
-    LoggingKind, MetricEmit, RecordingSink, Result, SchemaFieldMetadata, SchemaMetadata,
-    SchemaMetadataInit, SchemaRegistry, SpectraEvent, SpectraLevel, SpectraRouter, SpectraSink,
-    CALLSITE_FIELD, MAX_EVENT_QUERY_LIMIT, MAX_EVENT_QUERY_OFFSET, PII_MASK,
+    self, callsite_value, clamp_event_paging, mask_field_value, try_log_event_at,
+    try_log_event_now, try_record_counter, try_record_counter_at, try_record_counter_now,
+    try_record_gauge_at, try_record_gauge_now, validate_spectra_ident, ChainedSink, Error,
+    FieldClassification, LoggingKind, MetricEmit, RecordingSink, Result, SchemaFieldMetadata,
+    SchemaMetadata, SchemaMetadataInit, SchemaRegistry, SpectraEvent, SpectraLevel, SpectraRouter,
+    SpectraSink, CALLSITE_FIELD, MAX_EVENT_QUERY_LIMIT, MAX_EVENT_QUERY_OFFSET, PII_MASK,
 };
 pub use spectra_macros::{spectra_metric, spectra_schema};
 pub use spectra_runtime::{

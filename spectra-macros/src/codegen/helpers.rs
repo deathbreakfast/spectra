@@ -58,8 +58,8 @@ pub fn event_helper(spec: &EventSchemaSpec) -> TokenStream {
         impl #logger_name {
             /// Emit with an explicit timestamp (preserved via `current_emit_ts` at the sink).
             ///
-            /// The row also carries a reserved `_callsite` object (`file`, `line`) naming the
-            /// caller of this function.
+            /// The row also carries a reserved `_callsite` object (`file`, `line`, `module`)
+            /// naming the caller of this function.
             #[track_caller]
             pub fn log_at(
                 #(#field_params,)*
@@ -70,7 +70,7 @@ pub fn event_helper(spec: &EventSchemaSpec) -> TokenStream {
                 let caller = ::std::panic::Location::caller();
                 map.insert(
                     ::spectra::CALLSITE_FIELD.to_string(),
-                    serde_json::json!({ "file": caller.file(), "line": caller.line() }),
+                    ::spectra::callsite_value(caller),
                 );
                 let fields = serde_json::Value::Object(map);
                 ::spectra::try_log_event_at(#table_lit, &fields, ts);
@@ -100,6 +100,11 @@ pub fn metric_helper(spec: &MetricSchemaSpec) -> TokenStream {
             ///
             /// Label values: JSON strings are used as-is; numbers and bools are stringified;
             /// `null`, arrays, and objects are skipped (not coerced to empty strings).
+            ///
+            /// The point also carries a reserved `_callsite` label: the JSON text of the
+            /// `{file, line, module}` object naming the caller of this function. A caller's own
+            /// `_callsite` label is replaced.
+            #[track_caller]
             pub fn record_at(
                 delta: i64,
                 labels: serde_json::Value,
@@ -109,6 +114,7 @@ pub fn metric_helper(spec: &MetricSchemaSpec) -> TokenStream {
                     .as_object()
                     .map(|obj| {
                         obj.iter()
+                            .filter(|(k, _)| k.as_str() != ::spectra::CALLSITE_FIELD)
                             .filter_map(|(k, v)| {
                                 let value = match v {
                                     serde_json::Value::String(s) => Some(s.clone()),
@@ -121,14 +127,18 @@ pub fn metric_helper(spec: &MetricSchemaSpec) -> TokenStream {
                             .collect()
                     })
                     .unwrap_or_default();
-                let label_pairs: Vec<(&str, &str)> = owned
+                let callsite =
+                    ::spectra::callsite_value(::std::panic::Location::caller()).to_string();
+                let mut label_pairs: Vec<(&str, &str)> = owned
                     .iter()
                     .map(|(k, v)| (k.as_str(), v.as_str()))
                     .collect();
+                label_pairs.push((::spectra::CALLSITE_FIELD, callsite.as_str()));
                 ::spectra::try_record_counter_at(#name_lit, &label_pairs, delta, ts);
             }
 
             /// Record with the current UTC timestamp.
+            #[track_caller]
             pub fn record(delta: i64, labels: serde_json::Value) {
                 Self::record_at(delta, labels, chrono::Utc::now());
             }
