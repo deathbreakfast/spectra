@@ -38,6 +38,7 @@
 //! that validate before SQL.
 
 mod aggregate;
+mod callsite;
 mod classification;
 mod config;
 mod dispatcher;
@@ -60,6 +61,7 @@ mod topic;
 mod types;
 mod validate;
 
+pub use callsite::{callsite_value, module_path_from_file};
 pub use classification::{mask_field_value, mask_pii_fields, FieldClassification, PII_MASK};
 pub use config::{install_config, EmitPolicy, NameOverride, SpectraConfig};
 pub use emit_buffer::{

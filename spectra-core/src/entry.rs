@@ -1,3 +1,6 @@
+use std::borrow::Cow;
+use std::panic::Location;
+
 pub use crate::dispatcher::set_sink;
 
 /// Record a counter when a sink is configured; no-op if unset or re-entrant.
@@ -61,6 +64,11 @@ pub fn try_record_gauge(name: &str, labels: &[(&str, &str)], value: f64) {
 }
 
 /// Log a structured event when a sink is configured; no-op if unset or re-entrant.
+///
+/// The row gains a reserved [`CALLSITE_FIELD`](crate::CALLSITE_FIELD) object naming the
+/// caller (`file`, `line`, `module`) unless `fields` already carries one, as rows from
+/// generated `*Logger` helpers do.
+#[track_caller]
 pub fn try_log_event(table: &str, fields: &serde_json::Value) {
     if reject_invalid_ident(table) {
         return;
@@ -68,6 +76,7 @@ pub fn try_log_event(table: &str, fields: &serde_json::Value) {
     if !crate::emit_buffer::is_replaying() && crate::gate::drop_event(table) {
         return;
     }
+    let fields = &*with_callsite(fields, Location::caller());
     if crate::emit_buffer::push_event(table, fields) {
         return;
     }
@@ -103,14 +112,40 @@ pub fn try_record_gauge_now(name: &str, labels: &[(&str, &str)], value: f64) {
 }
 
 /// Log a structured event immediately, bypassing any active emit buffer.
+///
+/// Stamps the caller's [`CALLSITE_FIELD`](crate::CALLSITE_FIELD) like [`try_log_event`].
+#[track_caller]
 pub fn try_log_event_now(table: &str, fields: &serde_json::Value) {
+    log_event_now_from(table, fields, Location::caller());
+}
+
+fn log_event_now_from(table: &str, fields: &serde_json::Value, caller: &Location<'_>) {
     if reject_invalid_ident(table) {
         return;
     }
     if crate::gate::drop_event(table) {
         return;
     }
+    let fields = &*with_callsite(fields, caller);
     crate::dispatcher::enter_dispatch_event(table, |sink| sink.log_event(table, fields));
+}
+
+/// Adds the caller's `_callsite` to an object payload that has none; borrows otherwise.
+fn with_callsite<'a>(
+    fields: &'a serde_json::Value,
+    caller: &Location<'_>,
+) -> Cow<'a, serde_json::Value> {
+    match fields {
+        serde_json::Value::Object(map) if !map.contains_key(crate::CALLSITE_FIELD) => {
+            let mut map = map.clone();
+            map.insert(
+                crate::CALLSITE_FIELD.to_owned(),
+                crate::callsite_value(caller),
+            );
+            Cow::Owned(serde_json::Value::Object(map))
+        }
+        _ => Cow::Borrowed(fields),
+    }
 }
 
 fn reject_invalid_ident(name: &str) -> bool {
@@ -149,12 +184,16 @@ pub fn try_record_gauge_at(
 }
 
 /// Log a structured event immediately with an explicit emit timestamp.
+///
+/// Stamps the caller's [`CALLSITE_FIELD`](crate::CALLSITE_FIELD) like [`try_log_event`].
+#[track_caller]
 pub fn try_log_event_at(
     table: &str,
     fields: &serde_json::Value,
     ts: chrono::DateTime<chrono::Utc>,
 ) {
-    crate::emit_buffer::with_emit_ts(ts, || try_log_event_now(table, fields));
+    let caller = Location::caller();
+    crate::emit_buffer::with_emit_ts(ts, || log_event_now_from(table, fields, caller));
 }
 
 #[cfg(test)]
