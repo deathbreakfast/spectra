@@ -156,9 +156,9 @@ mod tests {
             Some("x25519_dalek")
         );
         assert_eq!(
-            module("/home/u/.cargo/git/checkouts/valence-ab12/cd34/valence/src/db/read.rs")
+            module("/home/u/.cargo/git/checkouts/ledger-ab12/cd34/ledger/src/db/read.rs")
                 .as_deref(),
-            Some("valence::db::read")
+            Some("ledger::db::read")
         );
     }
 
