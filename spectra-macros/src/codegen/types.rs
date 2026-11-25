@@ -3,6 +3,13 @@ use quote::{format_ident, quote};
 
 /// Map a DSL field type name to a Rust type token stream.
 pub fn map_rust_type(rust_type: &str) -> TokenStream {
+    if let Some(inner) = rust_type
+        .strip_prefix("Option<")
+        .and_then(|t| t.strip_suffix('>'))
+    {
+        let inner = map_rust_type(inner);
+        return quote! { Option<#inner> };
+    }
     match rust_type {
         "String" => quote! { String },
         "i64" => quote! { i64 },

@@ -1,0 +1,5 @@
+error: unsupported optional field type `Foo`; expected String, i64, f64, or bool
+  --> tests/ui/fail_schema_bad_option.rs:10:32
+   |
+10 |                 r#type: Option<Foo>,
+   |                                ^^^

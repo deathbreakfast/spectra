@@ -40,3 +40,24 @@ spectra_schema! {
     let parsed = parser::parse_event_schema(content).unwrap();
     assert_eq!(parsed.table, "valence_query_log");
 }
+
+#[test]
+fn event_parser_reads_optional_field_types() {
+    let content = r#"
+use spectra_macros::spectra_schema;
+
+spectra_schema! {
+    StorageSample {
+        table: "storage_sample",
+        version: "0.1.0",
+        fields: [
+            table_bytes: { r#type: Option<i64> },
+            name: { r#type: String },
+        ],
+    }
+}
+"#;
+    let parsed = parser::parse_event_schema(content).unwrap();
+    assert_eq!(parsed.fields[0].rust_type, "Option<i64>");
+    assert_eq!(parsed.fields[1].rust_type, "String");
+}
