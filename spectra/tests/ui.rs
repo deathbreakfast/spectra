@@ -5,6 +5,8 @@ fn ui() {
     let t = trybuild::TestCases::new();
     t.pass("tests/ui/pass_metric.rs");
     t.pass("tests/ui/pass_schema.rs");
+    t.pass("tests/ui/pass_schema_retention.rs");
     t.compile_fail("tests/ui/fail_metric_missing_name.rs");
+    t.compile_fail("tests/ui/fail_metric_retention.rs");
     t.compile_fail("tests/ui/fail_schema_missing_table.rs");
 }

@@ -153,13 +153,15 @@ impl EventStorageBackend for RemoteEventsBackend {
             EventsInner::Remote(client) => {
                 spectra_core::validate_spectra_ident(table)?;
                 // A ClickHouse mutation has no row cap and reports no count, so `max_rows`
-                // does not apply here; the time bound is the only limit.
+                // does not apply here; the time bound is the only limit. `mutations_sync`
+                // makes the call return once the rows are gone, not when the mutation is queued.
                 let table = query_sql::escape_str(table)?;
                 let cutoff = query_sql::escape_str(&datetime_to_ch_ts(before))?;
                 client
                     .execute(&format!(
                         "ALTER TABLE spectra_events DELETE \
-                         WHERE table_name = '{table}' AND ts < '{cutoff}'"
+                         WHERE table_name = '{table}' AND ts < '{cutoff}' \
+                         SETTINGS mutations_sync = 1"
                     ))
                     .await?;
                 Ok(PruneOutcome::default())
@@ -197,7 +199,7 @@ impl EventStorageBackend for RemoteEventsBackend {
             EventsInner::Mem(store) => Ok(store.event_stats(table)),
             EventsInner::Remote(client) => {
                 let sql = format!(
-                    "SELECT toString(count()), toString(min(ts)), toString(max(ts)) \
+                    "SELECT toString(count()) AS c0, toString(min(ts)) AS c1, toString(max(ts)) AS c2 \
                      FROM spectra_events WHERE table_name = '{}'",
                     query_sql::escape_str(table)?
                 );

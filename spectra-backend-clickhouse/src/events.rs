@@ -6,7 +6,7 @@ use serde_json::Value;
 use spectra_backend_remote_common::RemoteEventsBackend;
 use spectra_core::{
     EventAggregateResult, EventRow, EventStorageBackend, EventWriteRow, EventsAggregateFilter,
-    EventsQueryFilter, Result, StorageEngineType, StorageStats,
+    EventsQueryFilter, PruneOutcome, Result, StorageEngineType, StorageStats,
 };
 
 /// Remote ClickHouse structured-event storage.
@@ -141,6 +141,15 @@ impl EventStorageBackend for ClickHouseEventsBackend {
 
     async fn query_rows(&self, filter: EventsQueryFilter) -> Result<Vec<EventRow>> {
         self.0.query_rows(filter).await
+    }
+
+    async fn prune_before(
+        &self,
+        table: &str,
+        before: DateTime<Utc>,
+        max_rows: u32,
+    ) -> Result<PruneOutcome> {
+        self.0.prune_before(table, before, max_rows).await
     }
 
     async fn event_stats(&self, table: &str) -> Result<StorageStats> {

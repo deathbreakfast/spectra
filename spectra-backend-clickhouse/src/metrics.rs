@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use spectra_backend_remote_common::RemoteMetricsBackend;
 use spectra_core::{
-    MetricPoint, MetricWriteRow, MetricsQueryRange, MetricsStorageBackend, Result,
+    MetricPoint, MetricWriteRow, MetricsQueryRange, MetricsStorageBackend, PruneOutcome, Result,
     StorageEngineType, StorageStats,
 };
 
@@ -151,6 +151,10 @@ impl MetricsStorageBackend for ClickHouseMetricsBackend {
 
     async fn metric_stats(&self, name: &str) -> Result<StorageStats> {
         self.0.metric_stats(name).await
+    }
+
+    async fn prune_before(&self, before: DateTime<Utc>, max_rows: u32) -> Result<PruneOutcome> {
+        self.0.prune_before(before, max_rows).await
     }
 
     async fn query_range(&self, query: MetricsQueryRange) -> Result<Vec<MetricPoint>> {

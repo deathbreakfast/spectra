@@ -1,0 +1,5 @@
+error: `retention_days` is only valid on event schemas (`spectra_schema!`); metrics are pruned store-wide through `RetentionConfig::metrics_days`
+ --> tests/ui/fail_metric_retention.rs:8:9
+  |
+8 |         retention_days: 30,
+  |         ^^^^^^^^^^^^^^

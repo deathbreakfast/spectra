@@ -232,7 +232,8 @@ impl RemoteClient {
 
     /// Run a `count()/min(ts)/max(ts)` query and shape it as [`spectra_core::StorageStats`].
     ///
-    /// `sql` must select `toString(count())`, `min(ts)` and `max(ts)` as strings. Timestamps are
+    /// `sql` must select `toString(count())`, `min(ts)` and `max(ts)` as strings aliased `c0`,
+    /// `c1` and `c2`; the HTTP client matches columns by name. Timestamps are
     /// ignored when the count is zero, since `min` over no rows returns a default value.
     pub async fn query_stats(&self, sql: &str) -> Result<spectra_core::StorageStats> {
         let rows = self.query_strings(sql).await?;

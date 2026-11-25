@@ -13,7 +13,8 @@
 //!   macro expands inventory registration, typed `*Recorder` / `*Logger` helpers, and
 //!   transport `*Payload` / `*_TOPIC` DTOs.
 //! - **Schema DSL controls** — set emit defaults on the schema: `level`, `default_sample_rate`,
-//!   `coalesce_ms` (gauges), and field `classification` (`pii`, `safe_for_console`). See
+//!   `coalesce_ms` (gauges), `retention_days` (events), metric `labels`, and field
+//!   `classification` (`pii`, `safe_for_console`, `retention_days`). See
 //!   [`spectra_schema!`] and [`spectra_metric!`]. Runtime env/TOML overrides live on
 //!   [`spectra_core::SpectraConfig`].
 //! - **Composable storage** — inject backends on the builder: in-memory (`mem`), durable embedded
@@ -27,7 +28,9 @@
 //!   [`MAX_EVENT_QUERY_LIMIT`] / [`MAX_EVENT_QUERY_OFFSET`].
 //! - **Remote TLS** — ClickHouse/TensorBase connect requires `https://` or `tcp+tls://` unless
 //!   `SPECTRA_ALLOW_INSECURE_REMOTE=1` (plaintext `http://` / `tcp://`, development/CI only).
-//! - **Field classification helpers** — [`mask_field_value`] for host/UI display of PII columns
+//! - **Field classification helpers** — [`mask_field_value`] for host/UI display of PII columns,
+//!   and [`stand_in_labels`] for the `Customer 1`, `Customer 2` labels that aggregate queries
+//!   return in place of PII group, row and pivot values
 //!   (query authz remains a host/Gauge concern; see repository `SECURITY.md`).
 //! - **Diagnostics** — library crates emit structured `tracing` events; hosts initialize a
 //!   `tracing_subscriber` (see the `quickstart` example). Remote storage errors redact URL
@@ -354,9 +357,10 @@
 //! consumer binaries in publish-consume (depend on the same schema crate).
 //!
 //! - **Metric schema** ([`spectra_metric!`]) — a named measurement family; optional `level`,
-//!   `default_sample_rate`, and `coalesce_ms` (gauges).
+//!   `default_sample_rate`, `coalesce_ms` (gauges) and classified `labels`.
 //! - **Event schema** ([`spectra_schema!`]) — a typed structured log table with classified
-//!   columns; optional `level` and `default_sample_rate` (`coalesce_ms` is not valid on events).
+//!   columns; optional `level`, `default_sample_rate` and `retention_days` (`coalesce_ms` is not
+//!   valid on events).
 //!
 //! Full field tables: [`spectra_metric!`] / [`spectra_schema!`]. Runtime overrides (env/TOML):
 //! [`spectra_core::SpectraConfig`] and the emit-gate table in the crate README.
@@ -493,16 +497,18 @@ pub mod topics;
 /// Re-export for schema macro `inventory::submit!` expansions.
 pub use spectra_core::inventory;
 pub use spectra_core::{
-    self, clamp_event_paging, mask_field_value, try_log_event_at, try_log_event_now,
-    try_record_counter, try_record_counter_at, try_record_counter_now, try_record_gauge_at,
-    try_record_gauge_now, validate_spectra_ident, ChainedSink, Error, FieldClassification,
-    LoggingKind, MetricEmit, RecordingSink, Result, SchemaFieldMetadata, SchemaMetadata,
-    SchemaMetadataInit, SchemaRegistry, SpectraEvent, SpectraLevel, SpectraRouter, SpectraSink,
-    CALLSITE_FIELD, MAX_EVENT_QUERY_LIMIT, MAX_EVENT_QUERY_OFFSET, PII_MASK,
+    self, clamp_event_paging, mask_field_value, stand_in_labels, try_log_event_at,
+    try_log_event_now, try_record_counter, try_record_counter_at, try_record_counter_now,
+    try_record_gauge_at, try_record_gauge_now, validate_spectra_ident, ChainedSink, Error,
+    FieldClassification, LoggingKind, MetricEmit, RecordingSink, Result, SchemaFieldMetadata,
+    SchemaMetadata, SchemaMetadataInit, SchemaRegistry, SpectraEvent, SpectraLevel, SpectraRouter,
+    SpectraSink, StandInLabels, CALLSITE_FIELD, MAX_EVENT_QUERY_LIMIT, MAX_EVENT_QUERY_OFFSET,
+    PII_MASK,
 };
 pub use spectra_macros::{spectra_metric, spectra_schema};
 pub use spectra_runtime::{
-    PersistConfig, PersistHandle, PersistOverflow, Spectra, SpectraBuilder, StoragePersistSink,
+    PersistConfig, PersistHandle, PersistOverflow, PruneReport, RetentionConfig, RetentionHandle,
+    RetentionPruner, Spectra, SpectraBuilder, StoragePersistSink,
 };
 
 #[cfg(feature = "mem")]

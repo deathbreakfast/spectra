@@ -23,6 +23,7 @@
 //! | Emit | [`try_record_counter`], [`try_log_event`], … |
 //! | Gate | [`install_config`], [`SpectraConfig::from_env`] |
 //! | Mask PII | [`mask_field_value`], [`mask_pii_fields`] |
+//! | Stand-in labels for PII aggregate keys | [`stand_in_labels`], [`mask_aggregate_labels`] |
 //! | Validate names | [`validate_spectra_ident`] |
 //! | Page bounds | [`clamp_event_paging`], [`MAX_EVENT_QUERY_LIMIT`] |
 //!
@@ -60,7 +61,10 @@ mod topic;
 mod types;
 mod validate;
 
-pub use classification::{mask_field_value, mask_pii_fields, FieldClassification, PII_MASK};
+pub use classification::{
+    mask_aggregate_labels, mask_field_value, mask_pii_fields, stand_in_labels, FieldClassification,
+    StandInLabels, PII_MASK,
+};
 pub use config::{install_config, EmitPolicy, NameOverride, SpectraConfig};
 pub use emit_buffer::{
     current_emit_ts, drain, is_active, job_enabled, request_enabled, request_scope, with_emit_ts,

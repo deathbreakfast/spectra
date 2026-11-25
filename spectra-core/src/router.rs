@@ -158,9 +158,33 @@ impl SpectraRouter {
     }
 
     /// Queries aggregated chart data through the resolved backend.
+    ///
+    /// When the table's registered schema classifies a `group_by_field`, `row_fields` entry
+    /// or `pivot_field` as PII, its values come back as stand-in labels (`Email 1`,
+    /// `Email 2`, …) from [`crate::mask_aggregate_labels`], salted fresh for each call. To get
+    /// labels another view can reproduce with [`crate::stand_in_labels`], call
+    /// [`Self::query_event_aggregate_with_salt`] instead.
     pub async fn query_event_aggregate(
         &self,
         filter: EventsAggregateFilter,
+    ) -> Result<EventAggregateResult> {
+        let salt = std::hash::BuildHasher::hash_one(
+            &std::collections::hash_map::RandomState::new(),
+            &filter.table,
+        );
+        self.query_event_aggregate_with_salt(filter, salt).await
+    }
+
+    /// Like [`Self::query_event_aggregate`], with stand-in labels salted by `salt`.
+    ///
+    /// A dashboard that draws several charts from one query passes the same salt here and to
+    /// [`crate::stand_in_labels`], so a value gets the same `Customer N` label in each. Use a
+    /// fresh random salt per dashboard load; reusing one forever lets the labels be linked
+    /// across loads.
+    pub async fn query_event_aggregate_with_salt(
+        &self,
+        filter: EventsAggregateFilter,
+        salt: u64,
     ) -> Result<EventAggregateResult> {
         crate::validate_spectra_ident(&filter.table)?;
         if let Some(ref field) = filter.group_by_field {
@@ -173,7 +197,11 @@ impl SpectraRouter {
         }
         let table = filter.table.clone();
         let backend = self.resolve_event(&table);
-        backend.query_aggregate(filter).await
+        let Some(schema) = crate::SchemaRegistry::global().get_schema(&table) else {
+            return backend.query_aggregate(filter).await;
+        };
+        let result = backend.query_aggregate(filter.clone()).await?;
+        Ok(crate::mask_aggregate_labels(result, &filter, schema, salt))
     }
 
     /// Installs a router as the process-global instance (call once).
