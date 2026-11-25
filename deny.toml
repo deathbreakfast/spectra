@@ -14,8 +14,8 @@ yanked = "deny"
 # Transitive via clickhouse 0.15 → polonius-the-crab → paste (unmaintained; no safe upgrade).
 ignore = [
     { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained but required transitively by clickhouse 0.15" },
-    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained with no safe upgrade; it is a direct dependency across the workspace" },
-    { id = "RUSTSEC-2026-0459", reason = "fix needs libsqlite3-sys >=0.39, which the locked rusqlite 0.40 does not allow yet; revisit on the next rusqlite bump" },
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained, no fixed release; temporary until the stack moves off chrono (security:RUSTSEC-2026-0543)" },
+    { id = "RUSTSEC-2026-0459", reason = "libsqlite3-sys via sqlx, no fixed release; temporary (security:RUSTSEC-2026-0459)" },
 ]
 
 [licenses]
