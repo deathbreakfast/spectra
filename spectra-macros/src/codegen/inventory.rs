@@ -4,7 +4,7 @@ use syn::LitStr;
 
 // quote! used throughout this module
 
-use crate::dsl_parser::{EventSchemaSpec, MetricSchemaSpec};
+use crate::dsl_parser::{EventSchemaSpec, FieldSpec, MetricSchemaSpec};
 
 use super::util::{level_tokens, metadata_fn_ident};
 
@@ -21,28 +21,8 @@ pub fn event_inventory(spec: &EventSchemaSpec) -> TokenStream {
         Span::call_site(),
     );
 
-    let field_meta: Vec<_> = spec
-        .fields
-        .iter()
-        .map(|f| {
-            let name = &f.name;
-            let rust_type = &f.rust_type;
-            let pii = f.pii;
-            let safe = f.safe_for_console;
-            quote! {
-                ::spectra::SchemaFieldMetadata {
-                    name: #name.to_string(),
-                    rust_type: #rust_type.to_string(),
-                    classification: ::spectra::FieldClassification {
-                        pii: #pii,
-                        safe_for_console: #safe,
-                        retention_days: None,
-                        purpose: None,
-                    },
-                }
-            }
-        })
-        .collect();
+    let field_meta = field_metadata(&spec.fields);
+    let retention_tokens = optional_u32(spec.retention_days);
 
     quote! {
         fn #fn_name() -> ::spectra::SchemaMetadata {
@@ -56,6 +36,7 @@ pub fn event_inventory(spec: &EventSchemaSpec) -> TokenStream {
                 default_level: #level,
                 default_sample_rate: #sample_rate,
                 gauge_coalesce_ms: None,
+                retention_days: #retention_tokens,
             }
         }
 
@@ -81,6 +62,7 @@ pub fn metric_inventory(spec: &MetricSchemaSpec) -> TokenStream {
         Some(ms) => quote! { Some(#ms) },
         None => quote! { None },
     };
+    let label_meta = field_metadata(&spec.labels);
 
     quote! {
         fn #fn_name() -> ::spectra::SchemaMetadata {
@@ -90,16 +72,50 @@ pub fn metric_inventory(spec: &MetricSchemaSpec) -> TokenStream {
                 version: #version_lit.to_string(),
                 description: #description_tokens,
                 logging_kind: ::spectra::LoggingKind::Metric,
-                fields: vec![],
+                fields: vec![ #(#label_meta),* ],
                 default_level: #level,
                 default_sample_rate: #sample_rate,
                 gauge_coalesce_ms: #coalesce_tokens,
+                retention_days: None,
             }
         }
 
         ::spectra::inventory::submit! {
             ::spectra::SchemaMetadataInit(#fn_name)
         }
+    }
+}
+
+/// `SchemaFieldMetadata` tokens for event fields or metric labels.
+fn field_metadata(fields: &[FieldSpec]) -> Vec<TokenStream> {
+    fields
+        .iter()
+        .map(|f| {
+            let name = &f.name;
+            let rust_type = &f.rust_type;
+            let pii = f.pii;
+            let safe = f.safe_for_console;
+            let retention = optional_u32(f.retention_days);
+            quote! {
+                ::spectra::SchemaFieldMetadata {
+                    name: #name.to_string(),
+                    rust_type: #rust_type.to_string(),
+                    classification: ::spectra::FieldClassification {
+                        pii: #pii,
+                        safe_for_console: #safe,
+                        retention_days: #retention,
+                        purpose: None,
+                    },
+                }
+            }
+        })
+        .collect()
+}
+
+fn optional_u32(value: Option<u32>) -> TokenStream {
+    match value {
+        Some(v) => quote! { Some(#v) },
+        None => quote! { None },
     }
 }
 

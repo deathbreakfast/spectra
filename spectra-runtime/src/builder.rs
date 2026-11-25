@@ -320,7 +320,9 @@ impl SpectraBuilder {
     /// Prune old metrics and event rows on a schedule (off unless set).
     ///
     /// [`Self::build`] must then run inside a tokio runtime, which hosts the prune loop for
-    /// the life of the returned [`Spectra`]. See [`RetentionConfig`] for what is kept and
+    /// the life of the returned [`Spectra`]. Event tables that declare `retention_days` in
+    /// their `spectra_schema!` are pruned on that schedule even without a `table_days` entry.
+    /// See [`RetentionConfig`] for what is kept and
     /// how much one run may delete. Hosts with their own scheduler can build a
     /// [`RetentionPruner`] directly instead.
     ///
@@ -496,15 +498,22 @@ impl SpectraBuilder {
                     ));
                 }
                 let registry = SchemaRegistry::global();
-                let event_tables = registry
+                let event_schemas: Vec<_> = registry
                     .list_schemas()
                     .into_iter()
-                    .filter(|name| {
-                        registry
-                            .get_schema(name)
-                            .is_some_and(|m| m.logging_kind == LoggingKind::Event)
+                    .filter_map(|name| registry.get_schema(name))
+                    .filter(|m| m.logging_kind == LoggingKind::Event)
+                    .collect();
+                let schema_days = event_schemas
+                    .iter()
+                    .filter_map(|m| {
+                        m.effective_retention_days()
+                            .map(|days| (m.table_or_metric.clone(), days))
                     })
-                    .map(str::to_string)
+                    .collect();
+                let event_tables = event_schemas
+                    .iter()
+                    .map(|m| m.table_or_metric.clone())
                     .collect();
                 Some(
                     RetentionPruner::new(
@@ -513,6 +522,7 @@ impl SpectraBuilder {
                         metrics_backends,
                         event_tables,
                     )
+                    .with_schema_days(schema_days)
                     .spawn(),
                 )
             }

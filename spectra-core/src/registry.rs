@@ -83,6 +83,9 @@ pub struct SchemaMetadata {
     pub default_sample_rate: f64,
     /// Gauges only: minimum interval between emits (last-write-wins coalesce window).
     pub gauge_coalesce_ms: Option<u64>,
+    /// Events only: days to keep rows, from the schema's table-level `retention_days:`.
+    /// See [`Self::effective_retention_days`] for how field-level values combine with it.
+    pub retention_days: Option<u32>,
 }
 
 impl Default for SchemaMetadata {
@@ -97,6 +100,7 @@ impl Default for SchemaMetadata {
             default_level: SpectraLevel::Info,
             default_sample_rate: 1.0,
             gauge_coalesce_ms: None,
+            retention_days: None,
         }
     }
 }
@@ -105,6 +109,44 @@ impl SchemaMetadata {
     /// Returns the table or metric name.
     pub fn table_name(&self) -> &str {
         &self.table_or_metric
+    }
+
+    /// Days to keep this table's rows, as declared in the schema.
+    ///
+    /// Takes the shortest of the table-level `retention_days` and every field's
+    /// `classification.retention_days`: a prune deletes whole rows, so the strictest field
+    /// decides when a row goes. `None` when the schema declares no retention.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use spectra_core::{FieldClassification, SchemaFieldMetadata, SchemaMetadata};
+    ///
+    /// let field = |name: &str, days| SchemaFieldMetadata {
+    ///     name: name.to_string(),
+    ///     rust_type: "String".to_string(),
+    ///     classification: FieldClassification {
+    ///         pii: false,
+    ///         safe_for_console: true,
+    ///         retention_days: days,
+    ///         purpose: None,
+    ///     },
+    /// };
+    /// let schema = SchemaMetadata {
+    ///     retention_days: Some(90),
+    ///     fields: vec![field("email", Some(30)), field("region", None)],
+    ///     ..SchemaMetadata::default()
+    /// };
+    /// assert_eq!(schema.effective_retention_days(), Some(30));
+    /// assert_eq!(SchemaMetadata::default().effective_retention_days(), None);
+    /// ```
+    #[must_use]
+    pub fn effective_retention_days(&self) -> Option<u32> {
+        self.fields
+            .iter()
+            .filter_map(|f| f.classification.retention_days)
+            .chain(self.retention_days)
+            .min()
     }
 }
 

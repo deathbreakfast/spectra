@@ -34,7 +34,9 @@
 //! - **`level`** — verbosity tier (`Error` / `Warn` / `Info` / `Debug` / `Trace`; default `Info`)
 //! - **`default_sample_rate`** — keep probability `0.0`–`1.0` (default `1.0`)
 //! - **`coalesce_ms`** — gauge coalescing window (metrics only)
-//! - **`classification`** — per-field `pii` / `safe_for_console` (events only)
+//! - **`retention_days`** — days to keep the table's rows (events only)
+//! - **`classification`** — per-field `pii` / `safe_for_console` / `retention_days` on event
+//!   fields, and per-label `pii` / `safe_for_console` on metric `labels`
 //!
 //! See [`spectra_schema!`] and [`spectra_metric!`] for full field tables and examples.
 //!
@@ -66,6 +68,7 @@ use proc_macro::TokenStream;
 /// | `description` | no | Human-readable summary |
 /// | `level` | no | Emit verbosity: `Error`, `Warn`, `Info` (default), `Debug`, or `Trace` |
 /// | `default_sample_rate` | no | Keep probability `0.0`–`1.0` (default `1.0`); multiplied by the global sample rate |
+/// | `retention_days` | no | Days to keep rows; applied when the host enables `SpectraBuilder::retention` |
 /// | `fields` | yes | Column definitions with `r#type` and `classification` |
 ///
 /// `coalesce_ms` is **not** valid on events (compile error); use it only on [`spectra_metric!`].
@@ -78,6 +81,12 @@ use proc_macro::TokenStream;
 /// |-------|---------|
 /// | `pii` | Marks personally identifiable data for downstream policy |
 /// | `safe_for_console` | Allows the field in opt-in console/NDJSON mirroring |
+/// | `retention_days` | Optional days to keep rows holding this field |
+///
+/// The table's retention is the shortest of its `retention_days` and every field's, because a
+/// prune deletes whole rows. A host's `RetentionConfig::table_days` entry overrides it.
+/// Aggregate queries grouped, rowed or pivoted on a `pii` field return stand-in labels
+/// (`Customer 1`, `Customer 2`, …) in place of the values.
 ///
 /// Runtime overrides (`SPECTRA_LEVEL`, `SPECTRA_SAMPLE_RATE`, `SPECTRA_SAMPLE_<NAME>`, TOML)
 /// merge on top of these schema defaults via `SpectraConfig`.
@@ -134,6 +143,10 @@ pub fn spectra_schema(input: TokenStream) -> TokenStream {
 /// | `level` | no | Emit verbosity: `Error`, `Warn`, `Info` (default), `Debug`, or `Trace` |
 /// | `default_sample_rate` | no | Keep probability `0.0`–`1.0` (default `1.0`); multiplied by the global sample rate |
 /// | `coalesce_ms` | no | Gauge coalescing window in milliseconds (ignored for plain counters) |
+/// | `labels` | no | Label names with a `classification` (`pii`, `safe_for_console`), listed in the schema catalog |
+///
+/// `retention_days` is **not** valid on metrics (compile error): metrics are pruned store-wide
+/// through `RetentionConfig::metrics_days`.
 ///
 /// Runtime overrides (`SPECTRA_LEVEL`, `SPECTRA_SAMPLE_RATE`, `SPECTRA_SAMPLE_<NAME>`, TOML)
 /// merge on top of these schema defaults via `SpectraConfig`.

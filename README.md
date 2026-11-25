@@ -175,11 +175,34 @@ Spectra::builder()
 
 Pruning is off unless you set it. Each run deletes in batches of `batch_rows` (5000), at most
 `max_batches` (20) per store and table, so a store that is far behind catches up over
-several runs. The mem and SQLite backends enforce the row cap exactly. ClickHouse and
-TensorBase issue one `ALTER TABLE ... DELETE` per run, which has no row cap and finishes in
-the background. `FieldClassification::retention_days` is metadata only; retention comes from
-`RetentionConfig`. If your host has its own scheduler, build a `RetentionPruner` and call
-`prune_once` from a job instead of using the builder.
+several runs. The mem and SQLite backends enforce the row cap exactly. ClickHouse issues one
+`ALTER TABLE ... DELETE` per run, which has no row cap and returns once the rows are gone.
+TensorBase has no delete statement, so its stores are never pruned. If your host has its own
+scheduler, build a `RetentionPruner` and call `prune_once` from a job instead of using the
+builder.
+
+A schema can declare its own retention, which applies once the builder's `retention` is set:
+
+```rust
+spectra_schema! {
+    CheckoutEvent {
+        store: "default",
+        table: "checkout_event",
+        version: "0.1.0",
+        retention_days: 90,
+        fields: [
+            email: {
+                r#type: String,
+                classification: { pii: true, safe_for_console: false, retention_days: 30 },
+            },
+        ],
+    }
+}
+```
+
+The table keeps rows for the shortest declared value (30 days here), because a prune deletes
+whole rows. For an event table, a `table_days` entry wins over the schema, and the schema wins
+over `default_event_days`.
 
 ## Logging surfaces
 

@@ -1,6 +1,8 @@
 //! Scheduled, bounded retention prune for Spectra stores.
 //!
-//! [`RetentionConfig`] says how long to keep metrics and each event table.
+//! [`RetentionConfig`] says how long to keep metrics and each event table. Event tables whose
+//! `spectra_schema!` declares `retention_days` (at table level or on a field's classification)
+//! use that unless `table_days` overrides it; see [`RetentionPruner::with_schema_days`].
 //! [`RetentionPruner::prune_once`] deletes rows older than that in capped batches, and
 //! [`RetentionPruner::spawn`] repeats it on an interval. Hosts that already have a scheduler
 //! can skip `spawn` and call `prune_once` from a job.
@@ -15,7 +17,12 @@ use tokio::task::JoinHandle;
 
 /// What to keep and how hard each prune run may work.
 ///
-/// With no `metrics_days`, no `default_event_days` and no `table_days`, nothing is pruned.
+/// For an event table the days come from `table_days`, then the schema's declared retention
+/// ([`spectra_core::SchemaMetadata::effective_retention_days`]), then `default_event_days`.
+/// With none of those and no `metrics_days`, nothing is pruned.
+///
+/// TensorBase stores are never pruned: its `BaseStorage` engine has no `ALTER TABLE … DELETE`
+/// mutation, so its backends keep the storage trait's no-op `prune_before`.
 #[derive(Debug, Clone)]
 pub struct RetentionConfig {
     /// Time between scheduled runs (default 1 hour).
@@ -29,7 +36,7 @@ pub struct RetentionConfig {
     pub metrics_days: Option<u32>,
     /// Days to keep for every registered event table without a `table_days` entry.
     pub default_event_days: Option<u32>,
-    /// Days to keep per event table, overriding `default_event_days`.
+    /// Days to keep per event table, overriding the schema's retention and `default_event_days`.
     pub table_days: HashMap<String, u32>,
 }
 
@@ -64,6 +71,7 @@ pub struct RetentionPruner {
     router: Arc<SpectraRouter>,
     metrics_backends: Vec<SharedMetricsBackend>,
     event_tables: Vec<String>,
+    schema_days: HashMap<String, u32>,
 }
 
 impl RetentionPruner {
@@ -81,13 +89,26 @@ impl RetentionPruner {
             router,
             metrics_backends,
             event_tables,
+            schema_days: HashMap::new(),
         }
+    }
+
+    /// Sets the retention each event table's schema declares, keyed by table.
+    ///
+    /// These sit between `RetentionConfig::table_days` (which wins) and
+    /// `RetentionConfig::default_event_days`. [`crate::SpectraBuilder::retention`] fills them
+    /// from the schema registry; call this when building a pruner by hand.
+    #[must_use]
+    pub fn with_schema_days(mut self, schema_days: HashMap<String, u32>) -> Self {
+        self.schema_days = schema_days;
+        self
     }
 
     fn event_days(&self, table: &str) -> Option<u32> {
         self.config
             .table_days
             .get(table)
+            .or_else(|| self.schema_days.get(table))
             .copied()
             .or(self.config.default_event_days)
     }
@@ -122,6 +143,7 @@ impl RetentionPruner {
             .event_tables
             .iter()
             .chain(self.config.table_days.keys())
+            .chain(self.schema_days.keys())
             .collect();
         tables.sort();
         tables.dedup();
@@ -261,6 +283,35 @@ mod tests {
         assert!(!report.events_deleted.contains_key("audit"));
         assert_eq!(count(&events, "debug").await, 1);
         assert_eq!(count(&events, "audit").await, 2);
+    }
+
+    #[tokio::test]
+    async fn schema_days_sit_between_table_days_and_default() {
+        let mut config = RetentionConfig {
+            default_event_days: Some(60),
+            ..Default::default()
+        };
+        config.table_days.insert("audit".into(), 90);
+        let (pruner, events, _) = setup(config);
+        let pruner = pruner.with_schema_days(HashMap::from([
+            ("audit".to_string(), 7),
+            ("debug".to_string(), 7),
+        ]));
+        let now = Utc::now();
+        let old = now - chrono::Duration::days(30);
+        for table in ["audit", "debug"] {
+            events
+                .append_row(table, &json!({}), old, None)
+                .await
+                .expect("w");
+        }
+        let report = pruner.prune_once(now).await;
+        // `table_days` (90) beats the schema's 7 for audit; debug falls to the schema's 7,
+        // not the 60-day default.
+        assert_eq!(report.events_deleted.get("audit"), Some(&0));
+        assert_eq!(report.events_deleted.get("debug"), Some(&1));
+        assert_eq!(count(&events, "audit").await, 1);
+        assert_eq!(count(&events, "debug").await, 0);
     }
 
     #[tokio::test]

@@ -10,6 +10,9 @@
 //! - DDL uses `ENGINE = BaseStorage` (TensorBase dialect, not MergeTree).
 //! - `query_aggregate` sends the same ClickHouse-dialect `GROUP BY` SQL as the ClickHouse
 //!   adapter. A TensorBase build without those JSON functions returns a storage error.
+//! - Retention never prunes TensorBase stores. Its SQL has no `ALTER TABLE … DELETE` or
+//!   `DELETE` ([statement list](https://github.com/tensorbase/tensorbase/blob/main/docs/lang.md)),
+//!   so `prune_before` stays the storage trait's no-op and reports nothing deleted.
 
 mod ddl;
 mod events;

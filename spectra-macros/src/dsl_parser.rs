@@ -34,6 +34,7 @@ pub struct FieldSpec {
     pub rust_type: String,
     pub pii: bool,
     pub safe_for_console: bool,
+    pub retention_days: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +46,7 @@ pub struct EventSchemaSpec {
     pub description: Option<String>,
     pub level: Option<SpectraLevelSpec>,
     pub default_sample_rate: Option<f64>,
+    pub retention_days: Option<u32>,
     pub fields: Vec<FieldSpec>,
 }
 
@@ -58,6 +60,7 @@ pub struct MetricSchemaSpec {
     pub level: Option<SpectraLevelSpec>,
     pub default_sample_rate: Option<f64>,
     pub coalesce_ms: Option<u64>,
+    pub labels: Vec<FieldSpec>,
 }
 
 impl Parse for EventSchemaSpec {
@@ -72,6 +75,7 @@ impl Parse for EventSchemaSpec {
         let mut level = None;
         let mut default_sample_rate = None;
         let mut coalesce_ms = None;
+        let mut retention_days = None;
         let mut fields = Vec::new();
 
         while !content.is_empty() {
@@ -107,6 +111,10 @@ impl Parse for EventSchemaSpec {
                     let lit: LitInt = content.parse()?;
                     coalesce_ms = Some(lit.base10_parse::<u64>()?);
                 }
+                "retention_days" => {
+                    let lit: LitInt = content.parse()?;
+                    retention_days = Some(lit.base10_parse::<u32>()?);
+                }
                 "fields" => {
                     let fields_content;
                     syn::bracketed!(fields_content in content);
@@ -141,6 +149,7 @@ impl Parse for EventSchemaSpec {
             description,
             level,
             default_sample_rate,
+            retention_days,
             fields,
         })
     }
@@ -158,6 +167,7 @@ impl Parse for MetricSchemaSpec {
         let mut level = None;
         let mut default_sample_rate = None;
         let mut coalesce_ms = None;
+        let mut labels = Vec::new();
 
         while !content.is_empty() {
             let key: Ident = content.parse()?;
@@ -191,6 +201,18 @@ impl Parse for MetricSchemaSpec {
                     let lit: LitInt = content.parse()?;
                     coalesce_ms = Some(lit.base10_parse::<u64>()?);
                 }
+                "labels" => {
+                    let labels_content;
+                    syn::bracketed!(labels_content in content);
+                    labels = parse_fields(&labels_content)?;
+                }
+                "retention_days" => {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "`retention_days` is only valid on event schemas (`spectra_schema!`); \
+                         metrics are pruned store-wide through `RetentionConfig::metrics_days`",
+                    ));
+                }
                 _ => {
                     let _ = content.parse::<syn::Expr>();
                 }
@@ -210,6 +232,7 @@ impl Parse for MetricSchemaSpec {
             level,
             default_sample_rate,
             coalesce_ms,
+            labels,
         })
     }
 }
@@ -224,6 +247,7 @@ fn parse_fields(input: ParseStream) -> syn::Result<Vec<FieldSpec>> {
         let mut rust_type = "String".to_string();
         let mut pii = false;
         let mut safe_for_console = true;
+        let mut retention_days = None;
 
         while !field_content.is_empty() {
             let key: Ident = field_content.parse()?;
@@ -251,6 +275,10 @@ fn parse_fields(input: ParseStream) -> syn::Result<Vec<FieldSpec>> {
                                 let lit: syn::LitBool = class_content.parse()?;
                                 safe_for_console = lit.value;
                             }
+                            "retention_days" => {
+                                let lit: LitInt = class_content.parse()?;
+                                retention_days = Some(lit.base10_parse::<u32>()?);
+                            }
                             _ => {
                                 let _ = class_content.parse::<syn::Expr>();
                             }
@@ -274,6 +302,7 @@ fn parse_fields(input: ParseStream) -> syn::Result<Vec<FieldSpec>> {
             rust_type,
             pii,
             safe_for_console,
+            retention_days,
         });
 
         if input.peek(Token![,]) {

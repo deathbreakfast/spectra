@@ -207,11 +207,13 @@ impl MetricsStorageBackend for RemoteMetricsBackend {
             )),
             MetricsInner::Remote(client) => {
                 // A ClickHouse mutation has no row cap and reports no count, so `max_rows`
-                // does not apply here; the time bound is the only limit.
+                // does not apply here; the time bound is the only limit. `mutations_sync`
+                // makes the call return once the rows are gone, not when the mutation is queued.
                 let cutoff = query_sql::escape_str(&datetime_to_ch_ts(before))?;
                 client
                     .execute(&format!(
-                        "ALTER TABLE spectra_metrics DELETE WHERE ts < '{cutoff}'"
+                        "ALTER TABLE spectra_metrics DELETE WHERE ts < '{cutoff}' \
+                         SETTINGS mutations_sync = 1"
                     ))
                     .await?;
                 Ok(PruneOutcome::default())

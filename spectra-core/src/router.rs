@@ -158,6 +158,10 @@ impl SpectraRouter {
     }
 
     /// Queries aggregated chart data through the resolved backend.
+    ///
+    /// When the table's registered schema classifies a `group_by_field`, `row_fields` entry
+    /// or `pivot_field` as PII, its values come back as stand-in labels (`Email 1`,
+    /// `Email 2`, …) from [`crate::mask_aggregate_labels`], salted fresh for each call.
     pub async fn query_event_aggregate(
         &self,
         filter: EventsAggregateFilter,
@@ -173,7 +177,15 @@ impl SpectraRouter {
         }
         let table = filter.table.clone();
         let backend = self.resolve_event(&table);
-        backend.query_aggregate(filter).await
+        let Some(schema) = crate::SchemaRegistry::global().get_schema(&table) else {
+            return backend.query_aggregate(filter).await;
+        };
+        let result = backend.query_aggregate(filter.clone()).await?;
+        let salt = std::hash::BuildHasher::hash_one(
+            &std::collections::hash_map::RandomState::new(),
+            &table,
+        );
+        Ok(crate::mask_aggregate_labels(result, &filter, schema, salt))
     }
 
     /// Installs a router as the process-global instance (call once).
