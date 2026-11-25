@@ -7,6 +7,8 @@ and writes them to storage in batches.
   `Spectra::builder().sink(...).persist_disabled()` in processes that should not open storage.
 - `GroupSubscription` plus `BatchedStorageConsumer` read the topic and write batches (by size or
   time) through the router's `record_metrics_batch` and `append_rows_batch`.
+- `GroupSubscription::start_durable` saves a Photon checkpoint per shard once each batch is
+  written and resumes from it after a restart (at-least-once).
 - Run several consumer processes with disjoint `shard_range`s to split the load.
 
 See the crate docs for a consumer example and the delivery guarantees.

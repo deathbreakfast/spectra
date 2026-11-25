@@ -1,0 +1,7 @@
+[advisories]
+ignore = [
+    # chrono unmaintained, no fixed release; temporary until the stack moves off chrono (security:RUSTSEC-2026-0543)
+    "RUSTSEC-2026-0543",
+    # libsqlite3-sys via sqlx, no fixed release; temporary (security:RUSTSEC-2026-0459)
+    "RUSTSEC-2026-0459",
+]
