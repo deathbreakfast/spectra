@@ -147,7 +147,7 @@ impl MetricsStorageBackend for RemoteMetricsBackend {
             MetricsInner::Mem(store) => Ok(store.metric_stats(name)),
             MetricsInner::Remote(client) => {
                 let sql = format!(
-                    "SELECT toString(count()), toString(min(ts)), toString(max(ts)) \
+                    "SELECT toString(count()) AS c0, toString(min(ts)) AS c1, toString(max(ts)) AS c2 \
                      FROM spectra_metrics WHERE name = '{}'",
                     query_sql::escape_str(name)?
                 );

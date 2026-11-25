@@ -199,7 +199,7 @@ impl EventStorageBackend for RemoteEventsBackend {
             EventsInner::Mem(store) => Ok(store.event_stats(table)),
             EventsInner::Remote(client) => {
                 let sql = format!(
-                    "SELECT toString(count()), toString(min(ts)), toString(max(ts)) \
+                    "SELECT toString(count()) AS c0, toString(min(ts)) AS c1, toString(max(ts)) AS c2 \
                      FROM spectra_events WHERE table_name = '{}'",
                     query_sql::escape_str(table)?
                 );
