@@ -84,7 +84,9 @@ use proc_macro::TokenStream;
 /// | `retention_days` | Optional days to keep rows holding this field |
 ///
 /// The table's retention is the shortest of its `retention_days` and every field's, because a
-/// prune deletes whole rows. A host's `RetentionConfig::table_days` entry overrides it.
+/// prune deletes whole rows. It is a ceiling: a host's `RetentionConfig::table_days` entry can
+/// shorten it but not extend it. Nothing is pruned until the host enables
+/// `SpectraBuilder::retention`.
 /// Aggregate queries grouped, rowed or pivoted on a `pii` field return stand-in labels
 /// (`Customer 1`, `Customer 2`, …) in place of the values.
 ///

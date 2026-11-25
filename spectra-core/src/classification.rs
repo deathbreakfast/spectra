@@ -119,12 +119,14 @@ impl StandInLabels {
 ///
 /// - distinct values always get distinct labels;
 /// - the same `values` and `salt` always give the same labels, so a chart can match an
-///   aggregate result by reusing the query's salt;
+///   aggregate result fetched with
+///   [`crate::SpectraRouter::query_event_aggregate_with_salt`] and the same salt;
 /// - the numbering says nothing about the raw values or their sort order, and a new salt
 ///   reshuffles it.
 ///
 /// Spectra applies this to PII `group_by_field`, `row_fields` and `pivot_field` labels in
-/// [`crate::SpectraRouter::query_event_aggregate`], with a fresh salt per query.
+/// [`crate::SpectraRouter::query_event_aggregate`], with a fresh salt per query that is not
+/// returned; pass your own salt to `query_event_aggregate_with_salt` when labels must match.
 ///
 /// # Examples
 ///

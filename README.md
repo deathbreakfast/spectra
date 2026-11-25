@@ -201,8 +201,10 @@ spectra_schema! {
 ```
 
 The table keeps rows for the shortest declared value (30 days here), because a prune deletes
-whole rows. For an event table, a `table_days` entry wins over the schema, and the schema wins
-over `default_event_days`.
+whole rows. The schema's value is a ceiling: a shorter `table_days` entry applies, a longer
+one is ignored with a warning, and `default_event_days` doesn't apply to that table. Declared
+retention does nothing until the host turns pruning on with `.retention(...)` (or runs a
+`RetentionPruner` itself).
 
 ## Logging surfaces
 

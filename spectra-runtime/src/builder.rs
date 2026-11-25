@@ -321,7 +321,8 @@ impl SpectraBuilder {
     ///
     /// [`Self::build`] must then run inside a tokio runtime, which hosts the prune loop for
     /// the life of the returned [`Spectra`]. Event tables that declare `retention_days` in
-    /// their `spectra_schema!` are pruned on that schedule even without a `table_days` entry.
+    /// their `spectra_schema!` are pruned on that schedule even without a `table_days` entry, and
+    /// a `table_days` entry can shorten that retention but not extend it.
     /// See [`RetentionConfig`] for what is kept and
     /// how much one run may delete. Hosts with their own scheduler can build a
     /// [`RetentionPruner`] directly instead.

@@ -12,6 +12,7 @@ use spectra::spectra_core::{
     EventsAggregateFilter, GridFilterModel, SharedEventBackend, SharedMetricsBackend,
     SpectraRouter,
 };
+use spectra::stand_in_labels;
 use spectra::{MemEventsBackend, MemMetricsBackend, SqliteEventsBackend};
 
 spectra::spectra_schema! {
@@ -99,6 +100,23 @@ async fn check(events: SharedEventBackend) {
     totals.sort_by(f64::total_cmp);
     assert_eq!(totals, vec![1.0, 2.0, 3.0], "counts survive relabelling");
     assert_stand_ins(slices.into_iter().map(|s| s.label).collect());
+
+    // With a caller's salt, `stand_in_labels` reproduces the router's labels. Customer i has
+    // i + 1 rows, so each slice's count identifies its raw value.
+    let mut salted = filter(EventExploreView::PieChart);
+    salted.group_by_field = Some("customer_id".into());
+    let EventAggregateResult::Slices { slices, .. } = router
+        .query_event_aggregate_with_salt(salted, 42)
+        .await
+        .expect("salted pie")
+    else {
+        panic!("expected slices");
+    };
+    let expected = stand_in_labels("customer_id", CUSTOMERS, 42);
+    for slice in &slices {
+        let raw = CUSTOMERS[slice.value as usize - 1];
+        assert_eq!(Some(slice.label.as_str()), expected.label(raw), "{raw}");
+    }
 
     let mut table = filter(EventExploreView::Table);
     table.row_fields = vec!["region".into(), "customer_id".into()];
