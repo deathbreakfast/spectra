@@ -67,8 +67,18 @@ pub struct ConsumerStats {
     pub batches_failed: u64,
 }
 
+/// Position of an envelope in the Photon log: the shard's storage key and its sequence number.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Cursor {
+    pub(crate) shard_key: String,
+    pub(crate) seq: i64,
+}
+
+/// Highest sequence per shard key whose batch the writer has attempted.
+pub(crate) type WrittenCursors = Arc<parking_lot::Mutex<HashMap<String, i64>>>;
+
 enum Msg {
-    Envelope(SpectraEnvelope),
+    Envelope(SpectraEnvelope, Option<Cursor>),
     Flush(oneshot::Sender<()>),
 }
 
@@ -96,6 +106,7 @@ impl std::error::Error for ConsumerClosed {}
 pub struct BatchedStorageConsumer {
     tx: mpsc::Sender<Msg>,
     counters: Arc<ConsumerCounters>,
+    written: WrittenCursors,
     worker: Arc<tokio::sync::Mutex<Option<JoinHandle<()>>>>,
 }
 
@@ -105,16 +116,19 @@ impl BatchedStorageConsumer {
         let config = config.normalized();
         let (tx, rx) = mpsc::channel(config.queue_max);
         let counters = Arc::new(ConsumerCounters::default());
+        let written = WrittenCursors::default();
         let worker = tokio::spawn(writer_loop(
             rx,
             router,
             config.batch_max,
             config.batch_wait,
             Arc::clone(&counters),
+            Arc::clone(&written),
         ));
         Self {
             tx,
             counters,
+            written,
             worker: Arc::new(tokio::sync::Mutex::new(Some(worker))),
         }
     }
@@ -122,9 +136,27 @@ impl BatchedStorageConsumer {
     /// Queue one envelope, waiting while the queue is full.
     pub async fn ingest(&self, envelope: SpectraEnvelope) -> Result<(), ConsumerClosed> {
         self.tx
-            .send(Msg::Envelope(envelope))
+            .send(Msg::Envelope(envelope, None))
             .await
             .map_err(|_| ConsumerClosed)
+    }
+
+    /// Queue an envelope read from Photon at `cursor`; once its batch has been written the
+    /// cursor becomes eligible for a checkpoint.
+    pub(crate) async fn ingest_at(
+        &self,
+        envelope: SpectraEnvelope,
+        cursor: Cursor,
+    ) -> Result<(), ConsumerClosed> {
+        self.tx
+            .send(Msg::Envelope(envelope, Some(cursor)))
+            .await
+            .map_err(|_| ConsumerClosed)
+    }
+
+    /// Highest written sequence per shard key (batches attempted, including failed ones).
+    pub(crate) fn written_cursors(&self) -> HashMap<String, i64> {
+        self.written.lock().clone()
     }
 
     /// Write out everything queued before this call.
@@ -164,8 +196,9 @@ async fn writer_loop(
     batch_max: usize,
     batch_wait: Duration,
     counters: Arc<ConsumerCounters>,
+    written: WrittenCursors,
 ) {
-    let mut batch: Vec<SpectraEnvelope> = Vec::with_capacity(batch_max);
+    let mut batch: Vec<(SpectraEnvelope, Option<Cursor>)> = Vec::with_capacity(batch_max);
     let mut deadline: Option<Instant> = None;
     loop {
         let msg = match deadline {
@@ -173,7 +206,7 @@ async fn writer_loop(
             Some(at) => match tokio::time::timeout_at(at, rx.recv()).await {
                 Ok(msg) => msg,
                 Err(_) => {
-                    write_batch(&router, std::mem::take(&mut batch), &counters).await;
+                    write_batch(&router, std::mem::take(&mut batch), &counters, &written).await;
                     deadline = None;
                     continue;
                 }
@@ -181,21 +214,21 @@ async fn writer_loop(
         };
         match msg {
             None => {
-                write_batch(&router, std::mem::take(&mut batch), &counters).await;
+                write_batch(&router, std::mem::take(&mut batch), &counters, &written).await;
                 return;
             }
-            Some(Msg::Envelope(envelope)) => {
+            Some(Msg::Envelope(envelope, cursor)) => {
                 if batch.is_empty() {
                     deadline = Some(Instant::now() + batch_wait);
                 }
-                batch.push(envelope);
+                batch.push((envelope, cursor));
                 if batch.len() >= batch_max {
-                    write_batch(&router, std::mem::take(&mut batch), &counters).await;
+                    write_batch(&router, std::mem::take(&mut batch), &counters, &written).await;
                     deadline = None;
                 }
             }
             Some(Msg::Flush(ack)) => {
-                write_batch(&router, std::mem::take(&mut batch), &counters).await;
+                write_batch(&router, std::mem::take(&mut batch), &counters, &written).await;
                 deadline = None;
                 let _ = ack.send(());
             }
@@ -210,16 +243,18 @@ fn arc_key<T: ?Sized>(arc: &Arc<T>) -> usize {
 #[tracing::instrument(name = "spectra.photon.write_batch", skip_all, fields(batch_len = batch.len()))]
 async fn write_batch(
     router: &SpectraRouter,
-    batch: Vec<SpectraEnvelope>,
+    batch: Vec<(SpectraEnvelope, Option<Cursor>)>,
     counters: &ConsumerCounters,
+    written: &WrittenCursors,
 ) {
     if batch.is_empty() {
         return;
     }
+    let cursors: Vec<Cursor> = batch.iter().filter_map(|(_, c)| c.clone()).collect();
     let mut metrics: HashMap<usize, (SharedMetricsBackend, Vec<MetricWriteRow>)> = HashMap::new();
     let mut events: HashMap<usize, (SharedEventBackend, Vec<EventWriteRow>)> = HashMap::new();
 
-    for envelope in batch {
+    for (envelope, _) in batch {
         match envelope {
             SpectraEnvelope::Counter {
                 name,
@@ -272,6 +307,14 @@ async fn write_batch(
     for (backend, rows) in events.into_values() {
         let result = backend.append_rows_batch(&rows).await;
         account(counters, rows.len(), result, "events");
+    }
+
+    if !cursors.is_empty() {
+        let mut written = written.lock();
+        for Cursor { shard_key, seq } in cursors {
+            let slot = written.entry(shard_key).or_insert(seq);
+            *slot = (*slot).max(seq);
+        }
     }
 }
 

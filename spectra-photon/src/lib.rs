@@ -12,10 +12,12 @@
 //!   labels (or event table). Give each consumer process a disjoint [`shard_range`] and the
 //!   group splits the load while each series stays ordered on one consumer.
 //!
-//! Delivery is at-most-once from the consumer's side: a batch that fails to write is logged
-//! and counted in [`ConsumerStats`], not retried. The subscription keeps no cursor of its own,
-//! so where a restarted consumer picks up is up to the Photon storage port; the in-memory port
-//! starts at the live tail and does not replay earlier emits.
+//! A batch that fails to write is logged and counted in [`ConsumerStats`], not retried.
+//! [`GroupSubscription::start`] keeps no cursor, so where a restarted consumer picks up is up
+//! to the Photon storage port; the in-memory port starts at the live tail and does not replay
+//! earlier emits. [`GroupSubscription::start_durable`] saves a Photon checkpoint per shard
+//! after each batch is written and resumes from it, which makes delivery at-least-once across
+//! restarts.
 //!
 //! ```no_run
 //! use std::sync::Arc;
@@ -39,5 +41,5 @@ mod topic;
 pub use consumer::{BatchConfig, BatchedStorageConsumer, ConsumerClosed, ConsumerStats};
 pub use envelope::SpectraEnvelope;
 pub use publish::{PhotonPublishSink, PublishStats, DEFAULT_PUBLISH_QUEUE_MAX};
-pub use subscriber::{all_shards, shard_range, GroupSubscription};
+pub use subscriber::{all_shards, shard_range, DurableConfig, GroupSubscription};
 pub use topic::{SpectraEmit, SHARD_COUNT, TOPIC_NAME};
