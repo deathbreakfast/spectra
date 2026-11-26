@@ -145,6 +145,10 @@ fn emit_metric_helper(m: &ParsedMetricSchema) -> anyhow::Result<TokenStream> {
 }
 
 fn map_rust_type(t: &str) -> TokenStream {
+    if let Some(inner) = t.strip_prefix("Option<").and_then(|t| t.strip_suffix('>')) {
+        let inner = map_rust_type(inner);
+        return quote! { Option<#inner> };
+    }
     match t {
         "String" => quote! { String },
         "i64" => quote! { i64 },

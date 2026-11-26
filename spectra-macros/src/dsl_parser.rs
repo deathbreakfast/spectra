@@ -231,7 +231,11 @@ fn parse_fields(input: ParseStream) -> syn::Result<Vec<FieldSpec>> {
             match key.to_string().as_str() {
                 "type" | "r#type" => {
                     if let Ok(ident) = field_content.parse::<Ident>() {
-                        rust_type = ident.to_string();
+                        rust_type = if ident == "Option" {
+                            parse_option_inner(&field_content, &ident)?
+                        } else {
+                            ident.to_string()
+                        };
                     } else {
                         let _ = field_content.parse::<syn::Expr>();
                     }
@@ -281,4 +285,29 @@ fn parse_fields(input: ParseStream) -> syn::Result<Vec<FieldSpec>> {
         }
     }
     Ok(fields)
+}
+
+/// Parse the `<T>` after `Option` and return `Option<T>`; `T` must be a scalar field type.
+fn parse_option_inner(input: ParseStream, option: &Ident) -> syn::Result<String> {
+    if !input.peek(Token![<]) {
+        return Err(syn::Error::new(
+            option.span(),
+            "`Option` needs an inner type, e.g. `Option<i64>`",
+        ));
+    }
+    input.parse::<Token![<]>()?;
+    let inner: Ident = input.parse()?;
+    match inner.to_string().as_str() {
+        "String" | "i64" | "f64" | "bool" => {}
+        other => {
+            return Err(syn::Error::new(
+                inner.span(),
+                format!(
+                    "unsupported optional field type `{other}`; expected String, i64, f64, or bool"
+                ),
+            ))
+        }
+    }
+    input.parse::<Token![>]>()?;
+    Ok(format!("Option<{inner}>"))
 }

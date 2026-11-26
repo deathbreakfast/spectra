@@ -163,10 +163,17 @@ fn extract_field_rust_type(block: &str) -> String {
     for key in ["r#type:", "type:"] {
         if let Some(idx) = block.find(key) {
             let after = &block[idx + key.len()..];
+            let after = after.trim_start();
             let ident_end = after
                 .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
                 .unwrap_or(after.len());
-            let t = after[..ident_end].trim();
+            let mut t = after[..ident_end].trim().to_string();
+            if t == "Option" {
+                if let Some(close) = after.find('>') {
+                    t = after[..=close].split_whitespace().collect();
+                }
+            }
+            let t = t.as_str();
             if !t.is_empty() {
                 return t.to_string();
             }

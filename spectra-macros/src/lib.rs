@@ -70,7 +70,8 @@ use proc_macro::TokenStream;
 ///
 /// `coalesce_ms` is **not** valid on events (compile error); use it only on [`spectra_metric!`].
 ///
-/// Supported helper field types are `String`, `i64`, `f64`, and `bool`.
+/// Supported helper field types are `String`, `i64`, `f64`, and `bool`. Wrap one in `Option`
+/// (`r#type: Option<i64>`) for a nullable column: `None` is stored as JSON `null`.
 ///
 /// Each field classification contains:
 ///
